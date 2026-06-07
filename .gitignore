@@ -1,0 +1,33 @@
+# Environment
+.venv/
+venv/
+env/
+*.egg-info/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Excel temp files
+~$*.xlsx
+
+# Streamlit cache
+.streamlit/
+.streamlit/secrets.toml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test files
+Test_Dashboard_Report.xlsx
+Professional_Dashboard_Report.xlsx
+*.tmp
