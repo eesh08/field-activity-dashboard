@@ -123,89 +123,66 @@ def load_data(file_mtime):
 
 df = load_data(os.path.getmtime('Call data 2026.xlsx'))
 
-# Create Excel export with slicers
-def create_excel_report_with_slicers(product_with_cpm, product_without_cpm, division_filter, month_filter, product_filter, df):
-    """Create professional Excel with data slicers"""
+# Create Excel export
+def create_excel_report_with_slicers(combined_product_counts, div_product_counts, division_filter, month_filter, product_filter, df):
+    """Create professional Excel report (combined, no CLM split)"""
     workbook = xlsxwriter.Workbook('Professional_Dashboard_Report.xlsx')
     
-    # Formats
     header_format = workbook.add_format({
-        'bold': True,
-        'font_color': 'white',
-        'bg_color': '#667eea',
-        'border': 1,
-        'align': 'center',
-        'valign': 'vcenter',
-        'font_size': 12
+        'bold': True, 'font_color': 'white', 'bg_color': '#667eea',
+        'border': 1, 'align': 'center', 'valign': 'vcenter', 'font_size': 12
     })
     
     title_format = workbook.add_format({
-        'bold': True,
-        'font_size': 16,
-        'bg_color': '#f0f0f0',
-        'border': 1,
-        'align': 'center'
+        'bold': True, 'font_size': 16, 'bg_color': '#f0f0f0',
+        'border': 1, 'align': 'center'
     })
     
     subtitle_format = workbook.add_format({
-        'bold': True,
-        'font_size': 11,
-        'bg_color': '#e8e8e8',
-        'border': 1
+        'bold': True, 'font_size': 11, 'bg_color': '#e8e8e8', 'border': 1
     })
     
     data_format = workbook.add_format({
-        'border': 1,
-        'align': 'center',
-        'num_format': '#,##0'
+        'border': 1, 'align': 'center', 'num_format': '#,##0'
     })
     
     text_format = workbook.add_format({
-        'border': 1,
-        'align': 'left'
+        'border': 1, 'align': 'left'
     })
     
-    # Sheet 1: Summary with KPIs
-    ws_summary = workbook.add_worksheet('Summary')
-    ws_summary.set_column('A:A', 30)
-    ws_summary.set_column('B:B', 25)
-    
-    ws_summary.merge_range('A1:B1', '📊 FIELD ACTIVITY DASHBOARD REPORT', title_format)
-    ws_summary.merge_range('A2:B2', f'Generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}', subtitle_format)
-    
-    row = 4
-    ws_summary.write(row, 0, 'METRIC', header_format)
-    ws_summary.write(row, 1, 'VALUE', header_format)
-    
-    # Get base data
     filtered_df = df.copy()
     if division_filter:
         filtered_df = filtered_df[filtered_df['Division'] == division_filter]
     if month_filter:
         filtered_df = filtered_df[filtered_df['Month'] == month_filter]
     
-    total_with_clm = len(filtered_df[filtered_df['Call with CLM'] == True])
-    total_without_clm = len(filtered_df[filtered_df['Call with CLM'] == False])
     total_calls = len(filtered_df)
+    total_discussions = sum(combined_product_counts.values())
+    unique_products = len(combined_product_counts)
+    
+    # Sheet 1: Summary
+    ws_summary = workbook.add_worksheet('Summary')
+    ws_summary.set_column('A:A', 30)
+    ws_summary.set_column('B:B', 25)
+    
+    ws_summary.merge_range('A1:B1', 'FIELD ACTIVITY DASHBOARD REPORT', title_format)
+    ws_summary.merge_range('A2:B2', f'Generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}', subtitle_format)
+    
+    row = 4
+    ws_summary.write(row, 0, 'METRIC', header_format)
+    ws_summary.write(row, 1, 'VALUE', header_format)
     
     metrics = [
         ('Total Field Visits', total_calls),
-        ('Visits WITH CLM', total_with_clm),
-        ('Visits WITHOUT CLM', total_without_clm),
-        ('Products with CLM Discussion Count', sum(product_with_cpm.values())),
-        ('Products without CLM Discussion Count', sum(product_without_cpm.values())),
-        ('Total Product Discussions', sum(product_with_cpm.values()) + sum(product_without_cpm.values())),
+        ('Total Product Discussions', total_discussions),
+        ('Unique Products', unique_products),
     ]
     
-    # Add product-specific metrics if product filter applied
     if product_filter:
         metrics.append(('---', '---'))
         metrics.append((f'PRODUCT: {product_filter}', '---'))
-        product_with_count = product_with_cpm.get(product_filter, 0)
-        product_without_count = product_without_cpm.get(product_filter, 0)
-        metrics.append(('Total Mentions', product_with_count + product_without_count))
-        metrics.append(('Mentions WITH CLM', product_with_count))
-        metrics.append(('Mentions WITHOUT CLM', product_without_count))
+        product_total = combined_product_counts.get(product_filter, 0)
+        metrics.append(('Total Mentions', product_total))
     
     row += 1
     for label, value in metrics:
@@ -217,77 +194,32 @@ def create_excel_report_with_slicers(product_with_cpm, product_without_cpm, divi
             ws_summary.write(row, 1, value, data_format)
         row += 1
     
-    # Sheet 2: Products WITH CLM
-    ws_with = workbook.add_worksheet('Products WITH CLM')
-    ws_with.set_column('A:A', 30)
-    ws_with.set_column('B:B', 20)
-    ws_with.set_column('C:C', 15)
+    # Sheet 2: Products by Division
+    ws_products = workbook.add_worksheet('Products by Division')
+    ws_products.set_column('A:A', 20)
+    ws_products.set_column('B:B', 30)
+    ws_products.set_column('C:C', 15)
+    ws_products.set_column('D:D', 10)
     
-    ws_with.merge_range('A1:C1', '📦 PRODUCTS DISCUSSED WITH CLM', title_format)
-    
-    row = 2
-    ws_with.write(row, 0, 'Product', header_format)
-    ws_with.write(row, 1, 'Discussions', header_format)
-    ws_with.write(row, 2, 'Rank', header_format)
-    
-    row += 1
-    for idx, (product, count) in enumerate(product_with_cpm.items(), 1):
-        ws_with.write(row, 0, product, text_format)
-        ws_with.write(row, 1, count, data_format)
-        ws_with.write(row, 2, idx, data_format)
-        row += 1
-    
-    # Sheet 3: Products WITHOUT CLM
-    ws_without = workbook.add_worksheet('Products WITHOUT CLM')
-    ws_without.set_column('A:A', 30)
-    ws_without.set_column('B:B', 20)
-    ws_without.set_column('C:C', 15)
-    
-    ws_without.merge_range('A1:C1', '📦 PRODUCTS DISCUSSED WITHOUT CLM', title_format)
+    ws_products.merge_range('A1:D1', 'PRODUCTS BY DIVISION', title_format)
     
     row = 2
-    ws_without.write(row, 0, 'Product', header_format)
-    ws_without.write(row, 1, 'Discussions', header_format)
-    ws_without.write(row, 2, 'Rank', header_format)
+    ws_products.write(row, 0, 'Division', header_format)
+    ws_products.write(row, 1, 'Product', header_format)
+    ws_products.write(row, 2, 'Discussions', header_format)
+    ws_products.write(row, 3, 'Rank', header_format)
     
     row += 1
-    for idx, (product, count) in enumerate(product_without_cpm.items(), 1):
-        ws_without.write(row, 0, product, text_format)
-        ws_without.write(row, 1, count, data_format)
-        ws_without.write(row, 2, idx, data_format)
-        row += 1
+    for division in sorted(div_product_counts.keys()):
+        products = div_product_counts[division]
+        for idx, (product, count) in enumerate(products.items(), 1):
+            ws_products.write(row, 0, division, text_format)
+            ws_products.write(row, 1, product, text_format)
+            ws_products.write(row, 2, count, data_format)
+            ws_products.write(row, 3, idx, data_format)
+            row += 1
     
-    # Sheet 4: Comparison
-    ws_comparison = workbook.add_worksheet('Comparison')
-    ws_comparison.set_column('A:A', 30)
-    ws_comparison.set_column('B:B', 20)
-    ws_comparison.set_column('C:C', 20)
-    ws_comparison.set_column('D:D', 15)
-    
-    ws_comparison.merge_range('A1:D1', '📊 PRODUCT COMPARISON: WITH CLM vs WITHOUT CLM', title_format)
-    
-    row = 2
-    ws_comparison.write(row, 0, 'Product', header_format)
-    ws_comparison.write(row, 1, 'WITH CLM', header_format)
-    ws_comparison.write(row, 2, 'WITHOUT CLM', header_format)
-    ws_comparison.write(row, 3, 'Total', header_format)
-    
-    # Get all unique products
-    all_products = set(product_with_cpm.keys()) | set(product_without_cpm.keys())
-    
-    row += 1
-    for product in sorted(all_products):
-        with_count = product_with_cpm.get(product, 0)
-        without_count = product_without_cpm.get(product, 0)
-        total_count = with_count + without_count
-        
-        ws_comparison.write(row, 0, product, text_format)
-        ws_comparison.write(row, 1, with_count, data_format)
-        ws_comparison.write(row, 2, without_count, data_format)
-        ws_comparison.write(row, 3, total_count, data_format)
-        row += 1
-    
-    # Sheet 5: Filters Applied
+    # Sheet 3: Filters Applied
     ws_filters = workbook.add_worksheet('Filters Applied')
     ws_filters.set_column('A:A', 25)
     ws_filters.set_column('B:B', 30)
@@ -305,6 +237,8 @@ def create_excel_report_with_slicers(product_with_cpm, product_without_cpm, divi
         ('Month Filter', month_filter if month_filter else 'All Months'),
         ('Product Filter', product_filter if product_filter else 'All Products'),
         ('Total Field Visits', f"{total_calls:,}"),
+        ('Total Discussions', f"{total_discussions:,}"),
+        ('Unique Products', f"{unique_products:,}"),
         ('Data Source', 'Call data 2026.xlsx'),
     ]
     
@@ -372,6 +306,25 @@ def count_all_products(df, division=None, month=None):
                 product_counts[product] = product_counts.get(product, 0) + count
     
     return dict(sorted(product_counts.items(), key=lambda x: x[1], reverse=True))
+
+def count_products_by_division(df, month=None):
+    """Count products grouped by division"""
+    filtered_df = df.copy()
+    if month:
+        filtered_df = filtered_df[filtered_df['Month'] == month]
+    
+    div_product_counts = {}
+    for division in filtered_df['Division'].unique():
+        div_df = filtered_df[filtered_df['Division'] == division]
+        counts = {}
+        for col in ['P1', 'P2', 'P3', 'P4']:
+            value_counts = div_df[col].value_counts()
+            for product, count in value_counts.items():
+                if pd.notna(product):
+                    counts[product] = counts.get(product, 0) + count
+        div_product_counts[division] = dict(sorted(counts.items(), key=lambda x: x[1], reverse=True))
+    
+    return div_product_counts
 
 # Sidebar filters
 st.sidebar.markdown("### 🔍 Dashboard Filters")
@@ -640,16 +593,15 @@ st.markdown("---")
 # Export Section
 st.markdown("## 📥 Export Professional Report with Slicers")
 st.markdown("""
-**Excel Report Includes 5 Sheets:**
+**Excel Report Includes 3 Sheets:**
 1. **Summary**: Key metrics and KPIs
-2. **Products WITH CLM**: All products discussed when CLM was present
-3. **Products WITHOUT CLM**: All products discussed without CLM
-4. **Comparison**: Side-by-side WITH vs WITHOUT CLM
-5. **Filters Applied**: Metadata about this report
+2. **Products by Division**: Products grouped by division with discussions and rank
+3. **Filters Applied**: Metadata about this report
 """)
 
 if st.button("📊 Generate & Download Excel Report"):
-    excel_file = create_excel_report_with_slicers(product_with_cpm, product_without_cpm, division_filter, month_filter, product_filter, df)
+    div_product_counts = count_products_by_division(df, month_filter)
+    excel_file = create_excel_report_with_slicers(combined_product_counts, div_product_counts, division_filter, month_filter, product_filter, df)
     with open(excel_file, 'rb') as f:
         st.download_button(
             label="📥 Click here to download the Excel report",
