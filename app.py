@@ -333,21 +333,18 @@ def count_products_by_clm(df, division=None, month=None):
     if month:
         filtered_df = filtered_df[filtered_df['Month'] == month]
     
-    # Separate WITH and WITHOUT CLM
     with_clm_df = filtered_df[filtered_df['Call with CLM'] == True]
     without_clm_df = filtered_df[filtered_df['Call with CLM'] == False]
     
     product_with_cpm = {}
     product_without_cpm = {}
     
-    # Count WITH CLM
     for col in ['P1', 'P2', 'P3', 'P4']:
         value_counts = with_clm_df[col].value_counts()
         for product, count in value_counts.items():
             if pd.notna(product):
                 product_with_cpm[product] = product_with_cpm.get(product, 0) + count
     
-    # Count WITHOUT CLM
     for col in ['P1', 'P2', 'P3', 'P4']:
         value_counts = without_clm_df[col].value_counts()
         for product, count in value_counts.items():
@@ -358,6 +355,23 @@ def count_products_by_clm(df, division=None, month=None):
         dict(sorted(product_with_cpm.items(), key=lambda x: x[1], reverse=True)),
         dict(sorted(product_without_cpm.items(), key=lambda x: x[1], reverse=True))
     )
+
+def count_all_products(df, division=None, month=None):
+    """Count all products combined (no CLM split)"""
+    filtered_df = df.copy()
+    if division:
+        filtered_df = filtered_df[filtered_df['Division'] == division]
+    if month:
+        filtered_df = filtered_df[filtered_df['Month'] == month]
+    
+    product_counts = {}
+    for col in ['P1', 'P2', 'P3', 'P4']:
+        value_counts = filtered_df[col].value_counts()
+        for product, count in value_counts.items():
+            if pd.notna(product):
+                product_counts[product] = product_counts.get(product, 0) + count
+    
+    return dict(sorted(product_counts.items(), key=lambda x: x[1], reverse=True))
 
 # Sidebar filters
 st.sidebar.markdown("### 🔍 Dashboard Filters")
@@ -383,6 +397,7 @@ st.markdown("---")
 
 # Get product counts
 product_with_cpm, product_without_cpm = count_products_by_clm(df, division_filter, month_filter)
+combined_product_counts = count_all_products(df, division_filter, month_filter)
 
 # Filter summary
 filter_text = []
@@ -452,27 +467,20 @@ if product_filter:
         </div>
         """, unsafe_allow_html=True)
     
-    # Product rank
-    all_with_products = sorted(product_with_cpm.items(), key=lambda x: x[1], reverse=True)
-    all_without_products = sorted(product_without_cpm.items(), key=lambda x: x[1], reverse=True)
-    
-    with_rank = next((i+1 for i, (p, _) in enumerate(all_with_products) if p == product_filter), None)
-    without_rank = next((i+1 for i, (p, _) in enumerate(all_without_products) if p == product_filter), None)
+    # Product rank (combined)
+    all_combined = sorted(combined_product_counts.items(), key=lambda x: x[1], reverse=True)
+    overall_rank = next((i+1 for i, (p, _) in enumerate(all_combined) if p == product_filter), None)
     
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        st.metric("Rank (WITH CLM)", f"#{with_rank if with_rank else 'N/A'}")
+        st.metric("Overall Rank", f"#{overall_rank if overall_rank else 'N/A'}")
     
     with col2:
-        st.metric("Rank (WITHOUT CLM)", f"#{without_rank if without_rank else 'N/A'}")
+        st.metric("WITH CLM", f"{product_with_count:,}")
     
     with col3:
-        if product_without_count > 0:
-            ratio = product_with_count / product_without_count
-            st.metric("Ratio (WITH/WITHOUT)", f"{ratio:.2f}")
-        else:
-            st.metric("Ratio (WITH/WITHOUT)", "Only WITHOUT")
+        st.metric("WITHOUT CLM", f"{product_without_count:,}")
     
     st.markdown("---")
     
@@ -575,118 +583,57 @@ with col3:
 st.markdown("---")
 
 # Charts
-col1, col2 = st.columns(2)
+st.markdown("### 📊 Top 10 Products (All Discussions)")
+top_combined = dict(list(combined_product_counts.items())[:10])
 
-with col1:
-    st.markdown("### 📊 Top 10 Products - WITH CLM")
-    top_with = dict(list(product_with_cpm.items())[:10])
-    
-    fig = go.Figure(data=[
-        go.Bar(
-            y=list(top_with.keys()),
-            x=list(top_with.values()),
-            orientation='h',
-            marker=dict(color='#43e97b'),
-            text=list(top_with.values()),
-            textposition='outside'
-        )
-    ])
-    fig.update_layout(height=400, template='plotly_white', showlegend=False)
-    st.plotly_chart(fig, use_container_width=True)
+fig = go.Figure(data=[
+    go.Bar(
+        y=list(top_combined.keys()),
+        x=list(top_combined.values()),
+        orientation='h',
+        marker=dict(color='#667eea'),
+        text=list(top_combined.values()),
+        textposition='outside'
+    )
+])
+fig.update_layout(height=500, template='plotly_white', showlegend=False)
+st.plotly_chart(fig, use_container_width=True)
 
-with col2:
-    st.markdown("### 📊 Top 10 Products - WITHOUT CLM")
-    top_without = dict(list(product_without_cpm.items())[:10])
-    
-    fig = go.Figure(data=[
-        go.Bar(
-            y=list(top_without.keys()),
-            x=list(top_without.values()),
-            orientation='h',
-            marker=dict(color='#f5576c'),
-            text=list(top_without.values()),
-            textposition='outside'
-        )
-    ])
-    fig.update_layout(height=400, template='plotly_white', showlegend=False)
-    st.plotly_chart(fig, use_container_width=True)
-
-# Product-specific comparison chart (if product selected)
+# Product-specific position breakdown (if product selected)
 if product_filter:
     st.markdown(f"### 📈 {product_filter} - Breakdown by Position")
     
-    col1, col2 = st.columns(2)
+    counts_by_pos = {}
+    for col in ['P1', 'P2', 'P3', 'P4']:
+        counts_by_pos[col] = (filtered_df[col] == product_filter).sum()
     
-    with col1:
-        # Count by P1, P2, P3, P4 for WITH CLM
-        with_clm_df = filtered_df[filtered_df['Call with CLM'] == True]
-        counts_with_by_pos = {}
-        for col in ['P1', 'P2', 'P3', 'P4']:
-            counts_with_by_pos[col] = (with_clm_df[col] == product_filter).sum()
-        
-        fig = go.Figure(data=[
-            go.Bar(
-                x=list(counts_with_by_pos.keys()),
-                y=list(counts_with_by_pos.values()),
-                marker=dict(color='#43e97b'),
-                text=list(counts_with_by_pos.values()),
-                textposition='outside'
-            )
-        ])
-        fig.update_layout(
-            title=f"{product_filter} - Position Breakdown WITH CLM",
-            xaxis_title="Product Column",
-            yaxis_title="Count",
-            height=350,
-            template='plotly_white'
+    fig = go.Figure(data=[
+        go.Bar(
+            x=list(counts_by_pos.keys()),
+            y=list(counts_by_pos.values()),
+            marker=dict(color='#667eea'),
+            text=list(counts_by_pos.values()),
+            textposition='outside'
         )
-        st.plotly_chart(fig, use_container_width=True)
-    
-    with col2:
-        # Count by P1, P2, P3, P4 for WITHOUT CLM
-        without_clm_df = filtered_df[filtered_df['Call with CLM'] == False]
-        counts_without_by_pos = {}
-        for col in ['P1', 'P2', 'P3', 'P4']:
-            counts_without_by_pos[col] = (without_clm_df[col] == product_filter).sum()
-        
-        fig = go.Figure(data=[
-            go.Bar(
-                x=list(counts_without_by_pos.keys()),
-                y=list(counts_without_by_pos.values()),
-                marker=dict(color='#f5576c'),
-                text=list(counts_without_by_pos.values()),
-                textposition='outside'
-            )
-        ])
-        fig.update_layout(
-            title=f"{product_filter} - Position Breakdown WITHOUT CLM",
-            xaxis_title="Product Column",
-            yaxis_title="Count",
-            height=350,
-            template='plotly_white'
-        )
-        st.plotly_chart(fig, use_container_width=True)
+    ])
+    fig.update_layout(
+        title=f"{product_filter} - Position Breakdown",
+        xaxis_title="Product Column",
+        yaxis_title="Count",
+        height=350,
+        template='plotly_white'
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
 st.markdown("---")
 
-# Detailed tables
-col1, col2 = st.columns(2)
-
-with col1:
-    st.markdown("### 📋 All Products - WITH CLM")
-    table_with = pd.DataFrame([
-        {'Product': p, 'Discussions': c, 'Rank': i+1}
-        for i, (p, c) in enumerate(product_with_cpm.items())
-    ])
-    st.dataframe(table_with, use_container_width=True, hide_index=True)
-
-with col2:
-    st.markdown("### 📋 All Products - WITHOUT CLM")
-    table_without = pd.DataFrame([
-        {'Product': p, 'Discussions': c, 'Rank': i+1}
-        for i, (p, c) in enumerate(product_without_cpm.items())
-    ])
-    st.dataframe(table_without, use_container_width=True, hide_index=True)
+# Detailed table
+st.markdown("### 📋 All Products")
+table_data = pd.DataFrame([
+    {'Product': p, 'Discussions': c, 'Rank': i+1}
+    for i, (p, c) in enumerate(combined_product_counts.items())
+])
+st.dataframe(table_data, use_container_width=True, hide_index=True)
 
 st.markdown("---")
 
