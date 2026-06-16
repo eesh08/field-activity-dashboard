@@ -4,6 +4,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import numpy as np
+import os
 from io import BytesIO
 import xlsxwriter
 from datetime import datetime
@@ -115,10 +116,12 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Load data
-@st.cache_data
-def load_data():
+@st.cache_data(show_spinner=False)
+def load_data(file_mtime):
     df = pd.read_excel('Call data 2026.xlsx', sheet_name='Call Data')
     return df
+
+df = load_data(os.path.getmtime('Call data 2026.xlsx'))
 
 # Create Excel export with slicers
 def create_excel_report_with_slicers(product_with_cpm, product_without_cpm, division_filter, month_filter, product_filter, df):
@@ -312,8 +315,6 @@ def create_excel_report_with_slicers(product_with_cpm, product_without_cpm, divi
     
     workbook.close()
     return 'Professional_Dashboard_Report.xlsx'
-
-df = load_data()
 
 # Helper functions
 def get_unique_products(df):
