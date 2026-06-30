@@ -151,11 +151,21 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Load data
+# File uploader
+uploaded_file = st.sidebar.file_uploader(
+    "Upload Excel File",
+    type=["xlsx"]
+)
+
 @st.cache_data
-def load_data():
-    df = pd.read_excel('Call data 2026.xlsx', sheet_name='Call Data')
-    return df
+def load_data(file):
+    try:
+        df = pd.read_excel(file, sheet_name='Call Data')
+        return df
+
+    except Exception as e:
+        st.error(f"Error reading file: {e}")
+        return None
 
 # Function to create Excel export
 def create_excel_report(product_counts, division_filter, month_filter, product_filter, df):
