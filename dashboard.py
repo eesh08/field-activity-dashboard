@@ -292,7 +292,10 @@ def create_excel_report(product_counts, division_filter, month_filter, product_f
     output.seek(0)
     return output
 
-df = load_data()
+if uploaded_file is not None:
+    df = load_data(uploaded_file)
+else:
+    st.warning("Please upload an Excel file to proceed.")
 
 # Process product data
 def get_unique_products(df):
