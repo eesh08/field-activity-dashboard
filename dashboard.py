@@ -166,6 +166,11 @@ def load_data(file):
     except Exception as e:
         st.error(f"Error reading file: {e}")
         return None
+    
+if uploaded_file is not None:
+    df = load_data(uploaded_file)
+else:
+    st.warning("Please upload an Excel file to proceed.")
 
 # Function to create Excel export
 def create_excel_report(product_counts, division_filter, month_filter, product_filter, df):
@@ -292,10 +297,7 @@ def create_excel_report(product_counts, division_filter, month_filter, product_f
     output.seek(0)
     return output
 
-if uploaded_file is not None:
-    df = load_data(uploaded_file)
-else:
-    st.warning("Please upload an Excel file to proceed.")
+
 
 # Process product data
 def get_unique_products(df):
