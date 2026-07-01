@@ -169,8 +169,13 @@ def load_data(file):
     
 if uploaded_file is not None:
     df = load_data(uploaded_file)
+
+    if df is None:
+        st.stop()
+
 else:
-    st.warning("Please upload an Excel file to proceed.")
+    st.warning("👈 Please upload an Excel file to continue.")
+    st.stop()
 
 # Function to create Excel export
 def create_excel_report(product_counts, division_filter, month_filter, product_filter, df):
