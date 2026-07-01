@@ -244,6 +244,8 @@ def create_excel_report(product_counts, division_filter, month_filter, product_f
         filtered_df = filtered_df[filtered_df['Division'] == division_filter]
     if month_filter:
         filtered_df = filtered_df[filtered_df['Month'] == month_filter]
+    if owner_filter: 
+        filtered_df = filtered_df[filtered_df['In-Field Activity: Owner Name'] == owner_filter]
     
     metrics = [
         ('Total Calls', len(filtered_df)),
@@ -320,7 +322,8 @@ def count_product_discussions(df, product, division=None, month=None):
         filtered_df = filtered_df[filtered_df['Division'] == division]
     if month:
         filtered_df = filtered_df[filtered_df['Month'] == month]
-    
+    if owner_filter: 
+        filtered_df = filtered_df[filtered_df['In-Field Activity: Owner Name'] == owner_filter]
     count = 0
     for col in ['P1', 'P2', 'P3', 'P4']:
         count += (filtered_df[col] == product).sum()
@@ -335,7 +338,9 @@ def get_product_counts_by_column(df, division=None, month=None):
         filtered_df = filtered_df[filtered_df['Division'] == division]
     if month:
         filtered_df = filtered_df[filtered_df['Month'] == month]
-    
+    if owner_filter: 
+        filtered_df = filtered_df[filtered_df['In-Field Activity: Owner Name'] == owner_filter]
+
     product_counts = {}
     for col in ['P1', 'P2', 'P3', 'P4']:
         value_counts = filtered_df[col].value_counts()
@@ -353,15 +358,18 @@ all_divisions = ['All'] + sorted(df['Division'].unique().tolist())
 all_months = ['All'] + sorted(df['Month'].unique().tolist())
 unique_products = get_unique_products(df)
 all_products = ['All'] + unique_products
+all_owners = ['All'] + sorted(df['In-Field Activity: Owner Name'].unique().tolist())
 
 selected_division = st.sidebar.selectbox("Division", all_divisions, index=0)
 selected_month = st.sidebar.selectbox("Month", all_months, index=0)
 selected_product = st.sidebar.selectbox("Product", all_products, index=0)
+selected_owner = st.sidebar.selectbox("Representative", all_owners, index=0) 
 
 # Prepare filter values
 division_filter = None if selected_division == 'All' else selected_division
 month_filter = None if selected_month == 'All' else selected_month
 product_filter = None if selected_product == 'All' else selected_product
+owner_filter = None if selected_owner == 'All' else selected_owner
 
 # Main title
 st.markdown("# 📊 Field Activity Dashboard")
@@ -397,6 +405,8 @@ if product_filter:
         filtered_df = filtered_df[filtered_df['Division'] == division_filter]
     if month_filter:
         filtered_df = filtered_df[filtered_df['Month'] == month_filter]
+    if owner_filter:
+        filtered_df = filtered_df[filtered_df['In-Field Activity: Owner Name'] == owner_filter]
     
     counts_by_col = {}
     for col in ['P1', 'P2', 'P3', 'P4']:
@@ -452,7 +462,9 @@ else:
         filtered_df = filtered_df[filtered_df['Division'] == division_filter]
     if month_filter:
         filtered_df = filtered_df[filtered_df['Month'] == month_filter]
-    
+    if owner_filter: 
+        filtered_df = filtered_df[filtered_df['In-Field Activity: Owner Name'] == owner_filter]
+
     total_calls = len(filtered_df)
     total_products = len(product_counts)
     total_discussions = sum(product_counts.values())
@@ -515,7 +527,9 @@ if product_filter:
             filtered_df = filtered_df[filtered_df['Division'] == division_filter]
         if month_filter:
             filtered_df = filtered_df[filtered_df['Month'] == month_filter]
-        
+        if owner_filter: 
+            filtered_df = filtered_df[filtered_df['In-Field Activity: Owner Name'] == owner_filter]
+
         counts_by_col = {}
         for col in ['P1', 'P2', 'P3', 'P4']:
             count = (filtered_df[col] == product_filter).sum()
@@ -697,6 +711,8 @@ if division_filter:
     filtered_df = filtered_df[filtered_df['Division'] == division_filter]
 if month_filter:
     filtered_df = filtered_df[filtered_df['Month'] == month_filter]
+if owner_filter: 
+        filtered_df = filtered_df[filtered_df['In-Field Activity: Owner Name'] == owner_filter]    
 
 # Create export data
 export_data = pd.DataFrame([
