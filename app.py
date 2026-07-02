@@ -668,28 +668,43 @@ st.markdown("---")
 # Detailed table
 st.markdown("## 📋 Detailed Product Breakdown")
 
-product_counts = get_product_counts_by_column(df, division_filter, month_filter)
-table_data = []
-for product, count in product_counts.items():
-    table_data.append({
-        'Product': product,
-        'Total Discussions': count
-    })
 
-table_df = pd.DataFrame(table_data)
-st.dataframe(
-    table_df,
-    use_container_width=True,
-    hide_index=True,
-    column_config={
-        'Product': st.column_config.TextColumn('Product', width='medium'),
-        'Total Discussions': st.column_config.ProgressColumn(
-            'Total Discussions',
-            min_value=0,
-            max_value=max(table_df['Total Discussions']) if len(table_df) > 0 else 1
-        )
-    }
+product_counts =  get_product_counts_by_column(df, division_filter, month_filter)
+filtered_df = df.copy()
+
+if division_filter:
+    filtered_df = filtered_df[
+        filtered_df['Division'] == division_filter
+    ]
+
+if month_filter:
+    filtered_df = filtered_df[
+        filtered_df['Month'] == month_filter
+    ]
+
+if owner_filter:
+    filtered_df = filtered_df[
+        filtered_df['In-Field Activity: Owner Name'] == owner_filter
+    ]
+
+melted_df = filtered_df.melt(
+    id_vars=['Division', 'Month'],
+    value_vars=['P1', 'P2', 'P3', 'P4'],
+    var_name='Position',
+    value_name='Product'
 )
+
+melted_df = melted_df.dropna(subset=['Product'])
+
+table_df = pd.pivot_table(
+    melted_df,
+    index=['Division', 'Product'],
+    columns='Month',
+    aggfunc='size',
+    fill_value=0
+).reset_index()
+
+st.dataframe(table_df)
 
 # Footer
 st.markdown("---")
