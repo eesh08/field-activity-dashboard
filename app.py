@@ -704,6 +704,16 @@ table_df = pd.pivot_table(
     fill_value=0
 ).reset_index()
 
+month_order = [
+    "Jan", "Feb", "Mar", "Apr", "May",
+    "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+]
+existing_months = [month for month in month_order if month in table_df.columns]
+
+table_df = table_df[
+    ["Division", "Product"] + existing_months
+]
+
 table_df["Total"] = table_df.iloc[:, 2:].sum(axis=1)
 table_df["Average"] = table_df.iloc[:, 2:-1].mean(axis=1)
 
