@@ -704,6 +704,9 @@ table_df = pd.pivot_table(
     fill_value=0
 ).reset_index()
 
+table_df["Total"] = table_df.iloc[:, 2:].sum(axis=1)
+table_df["Average"] = table_df.iloc[:, 2:-1].mean(axis=1)
+
 st.dataframe(table_df)
 
 # Footer
