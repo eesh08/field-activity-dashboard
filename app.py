@@ -636,15 +636,11 @@ else:
                 values=list(top_products.values()),
                 textinfo="label+percent",
                 hoverinfo="label+value+percent",
-                marker=dict(
-                    color=list(top_products.values()),
-                    line=dict(color='#333', width=1.5),
-                ),
 
             )
         ])
         fig_top.update_layout(
-            title=f"Top {top_n} Products by Discussion Count",
+            title=f"Top {top_n} Products by Discussion",
             height=500,
             showlegend=False,
             template='plotly_white',
