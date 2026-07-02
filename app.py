@@ -627,32 +627,28 @@ else:
     col1, col2 = st.columns([2, 1])
     
     with col1:
-        top_n = min(15, len(product_counts))
+        top_n = min(5, len(product_counts))
         top_products = dict(list(product_counts.items())[:top_n])
         
         fig_top = go.Figure(data=[
-            go.Bar(
-                y=list(top_products.keys()),
-                x=list(top_products.values()),
-                orientation='h',
+            go.Pie(
+                labels=list(top_products.keys()),
+                values=list(top_products.values()),
+                textinfo="label+percent",
+                hoverinfo="label+value+percent",
                 marker=dict(
                     color=list(top_products.values()),
-                    colorscale='Viridis',
-                    line=dict(color='#333', width=1.5)
+                    line=dict(color='#333', width=1.5),
                 ),
-                text=list(top_products.values()),
-                textposition='outside',
-                hovertemplate='<b>%{y}</b><br>Discussions: %{x}<extra></extra>'
+
             )
         ])
         fig_top.update_layout(
             title=f"Top {top_n} Products by Discussion Count",
-            xaxis_title="Number of Discussions",
-            yaxis_title="Product",
             height=500,
             showlegend=False,
             template='plotly_white',
-            yaxis={'categoryorder': 'total ascending'}
+            
         )
         st.plotly_chart(fig_top, use_container_width=True)
     
