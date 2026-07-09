@@ -759,16 +759,7 @@ with col3:
 
 st.markdown("""
 ---
-### 📋 How to Share the Dashboard:
-
-1. **Live Dashboard Link**: Share the local URL (http://localhost:8501) with your team
-2. **Excel Report**: Download the comprehensive Excel report with multiple sheets
-3. **CSV Export**: Export product data for further analysis
-4. **Deployment Options**:
-   - **Streamlit Cloud**: Deploy free at https://share.streamlit.io/
-   - **Heroku**: Deploy with Heroku hosting
-   - **Local Server**: Share via LAN for team access
-
+            
 ### 📊 Dashboard Features:
 - ✅ Interactive filters (Division, Month, Product)
 - ✅ Real-time KPI calculations
