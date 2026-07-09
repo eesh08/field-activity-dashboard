@@ -236,10 +236,10 @@ def create_excel_report(product_counts, division_filter, month_filter, product_f
         filtered_df = filtered_df[filtered_df['In-Field Activity: Owner Name'] == owner_filter]
     
     metrics = [
-        ('Total Calls', len(filtered_df)),
+        ('Total Visits', len(filtered_df)),
         ('Unique Products', len(product_counts)),
         ('Total Product Discussions', sum(product_counts.values())),
-        ('Avg Products per Call', round(sum(product_counts.values()) / len(filtered_df), 2) if len(filtered_df) > 0 else 0),
+        ('Avg Products per Visit', round(sum(product_counts.values()) / len(filtered_df), 2) if len(filtered_df) > 0 else 0),
     ]
     
     for label, value in metrics:
