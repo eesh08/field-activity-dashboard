@@ -153,13 +153,17 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Load data
-@st.cache_data(show_spinner=False)
-def load_data(file_mtime):
-    df = pd.read_excel('Call data 2026.xlsx', sheet_name='Call Data')
-    return df
+import glob
 
-df = load_data(os.path.getmtime('Call data 2026.xlsx'))
+files = glob.glob("Data/*.xlsx")
+
+df_list = []
+
+for file in files:
+    temp_df = pd.read_excel(file, sheet_name="Call Data")
+    df_list.append(temp_df)
+
+df = pd.concat(df_list, ignore_index=True)
 
 # Function to create Excel export
 def create_excel_report(product_counts, division_filter, month_filter, product_filter, df):
