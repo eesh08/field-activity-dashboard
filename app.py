@@ -402,7 +402,7 @@ if product_filter:
         counts_by_col[col] = count_col
     
     # KPI Cards for single product
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
     
     with col1:
         st.markdown(f"""
@@ -444,60 +444,86 @@ else:
     # Show overall metrics
     product_counts = get_product_counts_by_column(df, division_filter, month_filter)
     
-    # Calculate metrics
-    filtered_df = df.copy()
-    if division_filter:
-        filtered_df = filtered_df[filtered_df['Division'] == division_filter]
-    if month_filter:
-        filtered_df = filtered_df[filtered_df['Month'] == month_filter]
-    if owner_filter: 
-        filtered_df = filtered_df[filtered_df['In-Field Activity: Owner Name'] == owner_filter]
+# Calculate metrics
+filtered_df = df.copy()
 
-    total_calls = len(filtered_df)
-    total_products = len(product_counts)
-    total_discussions = sum(product_counts.values())
-    avg_per_call = total_discussions / total_calls if total_calls > 0 else 0
-    
-    st.markdown("## 📊 Overall Insights")
-    
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-label">📞 Total Calls</div>
-            <div class="metric-value">{total_calls:,}</div>
-            <small>Field visits</small>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown(f"""
-        <div class="metric-card-2">
-            <div class="metric-label">📦 Unique Products</div>
-            <div class="metric-value">{total_products:,}</div>
-            <small>Different products</small>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col3:
-        st.markdown(f"""
-        <div class="metric-card-3">
-            <div class="metric-label">💬 Total Discussions</div>
-            <div class="metric-value">{total_discussions:,}</div>
-            <small>All mentions</small>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col4:
-        st.markdown(f"""
-        <div class="metric-card-4">
-            <div class="metric-label">📈 Avg Products/Call</div>
-            <div class="metric-value">{avg_per_call:.2f}</div>
-            <small>Per visit</small>
-        </div>
-        """, unsafe_allow_html=True)
+if division_filter:
+    filtered_df = filtered_df[filtered_df['Division'] == division_filter]
 
+if month_filter:
+    filtered_df = filtered_df[filtered_df['Month'] == month_filter]
+
+if owner_filter:
+    filtered_df = filtered_df[
+        filtered_df['In-Field Activity: Owner Name'] == owner_filter
+    ]
+
+# KPI Calculations
+total_visits = filtered_df['No of Visits'].sum()
+total_products = len(product_counts)
+total_discussions = sum(product_counts.values())
+avg_per_call = total_discussions / total_calls if total_calls > 0 else 0
+
+# Visit Average Calculation
+total_visits = filtered_df['No of Visits'].sum()
+total_reps = filtered_df['In-Field Activity: Owner Name'].nunique()
+total_months = filtered_df['Month'].nunique()
+
+if total_reps > 0 and total_months > 0:
+    visit_average = total_visits / (total_reps * total_months)
+else:
+    visit_average = 0
+
+st.markdown("## 📊 Overall Insights")
+
+col1, col2, col3, col4, col5 = st.columns(5)
+
+
+
+with col1:
+    st.markdown(f"""
+    <div class="metric-card">
+        <div class="metric-label">📞 Total Visits</div>
+        <div class="metric-value">{total_visits:,}</div> # type: ignore
+        <small>Field visits</small>
+    </div>
+    """, unsafe_allow_html=True)
+
+with col2:
+    st.markdown(f"""
+    <div class="metric-card-2">
+        <div class="metric-label">📦 Unique Products</div>
+        <div class="metric-value">{total_products:,}</div>
+        <small>Different products</small>
+    </div>
+    """, unsafe_allow_html=True)
+
+with col3:
+    st.markdown(f"""
+    <div class="metric-card-3">
+        <div class="metric-label">💬 Total Discussions</div>
+        <div class="metric-value">{total_discussions:,}</div>
+        <small>All mentions</small>
+    </div>
+    """, unsafe_allow_html=True)
+with col4:
+    st.markdown(f"""
+    <div class="metric-card-4">
+        <div class="metric-label">📈 Avg Products/Visit</div>
+        <div class="metric-value">{avg_per_call:.2f}</div>
+        <small>Per visit</small>
+    </div>
+    """, unsafe_allow_html=True)
+
+with col5:
+    st.markdown(f"""
+    <div class="metric-card">
+        <div class="metric-label">🚗 Visits / Rep / Month</div>
+        <div class="metric-value">{visit_average:.2f}</div>
+        <small>Average field visits</small>
+    </div>
+    """, unsafe_allow_html=True)
+    
 st.markdown("---")
 
 # Charts section
