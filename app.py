@@ -31,65 +31,58 @@ st.markdown("""
             min-height: 100vh;
         }
         
-        .metric-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            padding: 25px;
+        .metric-card,
+        .metric-card-2,
+        .metric-card-3,
+        .metric-card-4 {
+            padding: 18px;
+            height: 170px;
             border-radius: 12px;
             color: white;
             text-align: center;
-            box-shadow: 0 8px 16px rgba(102, 126, 234, 0.4);
-            border: 2px solid rgba(255,255,255,0.2);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.14);
+            border: 2px solid rgba(255,255,255,0.18);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
             transition: all 0.3s ease;
         }
         
-        .metric-card:hover {
+        .metric-card:hover,
+        .metric-card-2:hover,
+        .metric-card-3:hover,
+        .metric-card-4:hover {
             transform: translateY(-5px);
-            box-shadow: 0 12px 24px rgba(102, 126, 234, 0.6);
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.18);
+        }
+        
+        .metric-card {
+            background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
         }
         
         .metric-card-2 {
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-            padding: 25px;
-            border-radius: 12px;
-            color: white;
-            text-align: center;
-            box-shadow: 0 8px 16px rgba(245, 87, 108, 0.4);
-            border: 2px solid rgba(255,255,255,0.2);
+            background: linear-gradient(135deg, #059669 0%, #047857 100%);
         }
         
         .metric-card-3 {
-            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-            padding: 25px;
-            border-radius: 12px;
-            color: white;
-            text-align: center;
-            box-shadow: 0 8px 16px rgba(79, 172, 254, 0.4);
-            border: 2px solid rgba(255,255,255,0.2);
+            background: linear-gradient(135deg, #EA580C 0%, #C2410C 100%);
         }
         
         .metric-card-4 {
-            background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
-            padding: 25px;
-            border-radius: 12px;
-            color: white;
-            text-align: center;
-            box-shadow: 0 8px 16px rgba(67, 233, 123, 0.4);
-            border: 2px solid rgba(255,255,255,0.2);
+            background: linear-gradient(135deg, #7C3AED 0%, #6D28D9 100%);
         }
         
         .metric-value {
-            font-size: 2.8rem;
+            font-size: 2.2rem;
             font-weight: 700;
             margin: 12px 0;
             letter-spacing: 1px;
         }
         
         .metric-label {
-            font-size: 1.05rem;
+            font-size: 0.9rem;
             opacity: 0.95;
             font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
         }
         
         h1 {
@@ -359,6 +352,11 @@ month_filter = None if selected_month == 'All' else selected_month
 product_filter = None if selected_product == 'All' else selected_product
 owner_filter = None if selected_owner == 'All' else selected_owner
 
+month_order = [
+    "Jan", "Feb", "Mar", "Apr", "May",
+    "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+]
+
 # Main title
 st.markdown("# 📊 Field Activity Dashboard")
 st.markdown("*Track product discussions across field visits*")
@@ -459,13 +457,14 @@ if owner_filter:
     ]
 
 # KPI Calculations
-total_visits = filtered_df['No of Visits'].sum()
+total_calls = len(filtered_df)
 total_products = len(product_counts)
 total_discussions = sum(product_counts.values())
 avg_per_call = total_discussions / total_calls if total_calls > 0 else 0
+total_doctors = filtered_df['Customer ID'].nunique()
 
 # Visit Average Calculation
-total_visits = filtered_df['No of Visits'].sum()
+total_visits = len(filtered_df)   # 1 row = 1 visit
 total_reps = filtered_df['In-Field Activity: Owner Name'].nunique()
 total_months = filtered_df['Month'].nunique()
 
@@ -473,58 +472,95 @@ if total_reps > 0 and total_months > 0:
     visit_average = total_visits / (total_reps * total_months)
 else:
     visit_average = 0
+# Total Visits with CLM
+total_clm_visits = filtered_df[
+    filtered_df['Call with CLM'] == True
+].shape[0]
+
+# Call Average Calculation
+total_calls = len(filtered_df)
+total_reps = filtered_df['In-Field Activity: Owner Name'].nunique()
+total_call_dates = filtered_df['CallDate'].nunique()
+
+if total_reps > 0 and total_call_dates > 0:
+    visits_per_rep_day = total_calls / (total_reps * total_call_dates)
+else:
+    visits_per_rep_day = 0
 
 st.markdown("## 📊 Overall Insights")
 
-col1, col2, col3, col4, col5 = st.columns(5)
+row1_col1, row1_col2, row1_col3, row1_col4 = st.columns(4)
+
+row2_col1, row2_col2, row2_col3, row2_col4 = st.columns(4)
 
 
-
-with col1:
+with row1_col1:
     st.markdown(f"""
     <div class="metric-card">
         <div class="metric-label">📞 Total Visits</div>
-        <div class="metric-value">{total_visits:,}</div> # type: ignore
-        <small>Field visits</small>
+        <div class="metric-value">{total_visits:,}</div>
     </div>
     """, unsafe_allow_html=True)
 
-with col2:
+with row1_col2:
     st.markdown(f"""
     <div class="metric-card-2">
         <div class="metric-label">📦 Unique Products</div>
         <div class="metric-value">{total_products:,}</div>
-        <small>Different products</small>
     </div>
     """, unsafe_allow_html=True)
 
-with col3:
+with row1_col3:
     st.markdown(f"""
     <div class="metric-card-3">
         <div class="metric-label">💬 Total Discussions</div>
         <div class="metric-value">{total_discussions:,}</div>
-        <small>All mentions</small>
-    </div>
-    """, unsafe_allow_html=True)
-with col4:
-    st.markdown(f"""
-    <div class="metric-card-4">
-        <div class="metric-label">📈 Avg Products/Visit</div>
-        <div class="metric-value">{avg_per_call:.2f}</div>
-        <small>Per visit</small>
     </div>
     """, unsafe_allow_html=True)
 
-with col5:
+with row1_col4:
     st.markdown(f"""
     <div class="metric-card">
-        <div class="metric-label">🚗 Visits / Rep / Month</div>
-        <div class="metric-value">{visit_average:.2f}</div>
-        <small>Average field visits</small>
+        <div class="metric-label">👨‍⚕️ Unique Doctors</div>
+        <div class="metric-value">{total_doctors:,}</div>
     </div>
     """, unsafe_allow_html=True)
-    
-st.markdown("---")
+
+st.markdown("<div style='height: 0.75rem;'></div>", unsafe_allow_html=True)
+
+with row2_col1:
+    st.markdown(f"""
+    <div class="metric-card-2">
+        <div class="metric-label">📈 Avg Products / Visit</div>
+        <div class="metric-value">{avg_per_call:.2f}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+with row2_col2:
+    st.markdown(f"""
+    <div class="metric-card-3">
+        <div class="metric-label">🚗 Visits / Rep / Month</div>
+        <div class="metric-value">{visit_average:.2f}</div>
+    </div>
+    """, unsafe_allow_html=True)   
+
+with row2_col3:
+    st.markdown(f"""
+    <div class="metric-card-4">
+        <div class="metric-label">📱 Visits with CLM</div>
+        <div class="metric-value">{total_clm_visits:,}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+with row2_col4:
+    st.markdown(f"""
+    <div class="metric-card">
+        <div class="metric-label">📅 Visits / Rep / Day</div>
+        <div class="metric-value">{visits_per_rep_day:.2f}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+st.markdown("<div style='height: 1.25rem;'></div>", unsafe_allow_html=True)
 
 # Charts section
 if product_filter:
@@ -638,20 +674,35 @@ else:
     product_counts = get_product_counts_by_column(df, division_filter, month_filter)
     
     # Top products chart
-    col1, col2 = st.columns([2, 1])
+    col1, col2 = st.columns([3, 1])
     
     with col1:
         top_n = min(5, len(product_counts))
-        top_products = dict(list(product_counts.items())[:top_n])
+
+        top_products = dict(list(product_counts.items())[:top_n])  
+
+        others_count = sum(list(product_counts.values())[top_n:])
+
+        if others_count > 0:
+             top_products["Others"] = others_count
         
         fig_top = go.Figure(data=[
             go.Pie(
                 labels=list(top_products.keys()),
                 values=list(top_products.values()),
                 textinfo="label+percent",
-                hoverinfo="label+value+percent",
-
-            )
+                 hoverinfo="label+value+percent",
+                marker=dict(
+                colors=[
+                    "#2563EB",   # Blue
+                    "#10B981",   # Green
+                    "#F59E0B",   # Amber
+                    "#8B5CF6",   # Purple
+                    "#EF4444",   # Red
+                    "#9CA3AF"    # Grey (Others)
+        ]
+    )
+)
         ])
         fig_top.update_layout(
             title=f"Top {top_n} Products by Discussion",
@@ -677,7 +728,146 @@ else:
         avg_discussions = sum(product_counts.values()) / len(product_counts) if product_counts else 0
         st.markdown(f"- **Avg Discussions/Product:** {avg_discussions:.0f}")
 
-st.markdown("---")
+# ==========================================================
+# MONTHLY PERFORMANCE TRENDS
+# ==========================================================
+
+st.markdown("## 📈 Monthly Performance Trends")
+
+# -----------------------------------------
+# Total Visits by Month
+# -----------------------------------------
+
+visits_month = (
+    filtered_df
+    .groupby("Month")
+    .size()
+    .reindex(month_order, fill_value=0)
+)
+
+fig_visits = px.bar(
+    x=visits_month.index,
+    y=visits_month.values,
+    title="Total Visits by Month",
+    text=visits_month.values,
+    labels={
+        "x": "Month",
+        "y": "Visits"
+    }
+)
+
+fig_visits.update_traces(
+    marker_color="#2563EB",
+    textposition="outside"
+)
+
+fig_visits.update_layout(
+    template="plotly_white",
+    height=380,
+    title_x=0.5
+)
+
+st.plotly_chart(fig_visits, use_container_width=True)
+
+# -----------------------------------------
+# Unique Doctors by Month
+# -----------------------------------------
+
+doctor_month = (
+    filtered_df
+    .groupby("Month")["Customer ID"]
+    .nunique()
+    .reindex(month_order, fill_value=0)
+)
+
+fig_doctors = px.bar(
+    x=doctor_month.index,
+    y=doctor_month.values,
+    title="Unique Doctors Visited by Month",
+    text=doctor_month.values,
+    labels={
+        "x": "Month",
+        "y": "Doctors"
+    }
+)
+
+fig_doctors.update_traces(
+    marker_color="#059669",
+    textposition="outside"
+)
+
+fig_doctors.update_layout(
+    template="plotly_white",
+    height=380,
+    title_x=0.5
+)
+
+st.plotly_chart(fig_doctors, use_container_width=True)
+
+# -----------------------------------------
+# Average Products Discussed per Visit
+# -----------------------------------------
+
+monthly_visits = (
+    filtered_df
+    .groupby("Month")
+    .size()
+)
+
+monthly_discussions = {}
+
+for month in month_order:
+
+    if month in filtered_df["Month"].values:
+
+        temp = filtered_df[
+            filtered_df["Month"] == month
+        ]
+
+        discussions = 0
+
+        for col in ["P1", "P2", "P3", "P4"]:
+            discussions += temp[col].count()
+
+        monthly_discussions[month] = discussions
+
+avg_products = {}
+
+for month in month_order:
+
+    visits = monthly_visits.get(month, 0)
+
+    discussions = monthly_discussions.get(month, 0)
+
+    avg_products[month] = (
+        discussions / visits if visits > 0 else 0
+    )
+
+fig_avg = px.line(
+    x=list(avg_products.keys()),
+    y=list(avg_products.values()),
+    title="Average Products Discussed per Visit",
+    markers=True,
+    labels={
+        "x": "Month",
+        "y": "Products / Visit"
+    }
+)
+
+fig_avg.update_traces(
+    line=dict(color="#EA580C", width=4),
+    marker=dict(size=9)
+)
+
+fig_avg.update_layout(
+    template="plotly_white",
+    height=380,
+    title_x=0.5
+)
+
+st.plotly_chart(fig_avg, use_container_width=True)
+
+st.markdown("<div style='height: 1.25rem;'></div>", unsafe_allow_html=True)
 
 # Detailed table
 st.markdown("## 📋 Detailed Product Breakdown")
@@ -718,10 +908,7 @@ table_df = pd.pivot_table(
     fill_value=0
 ).reset_index()
 
-month_order = [
-    "Jan", "Feb", "Mar", "Apr", "May",
-    "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-]
+
 existing_months = [month for month in month_order if month in table_df.columns]
 
 table_df = table_df[
@@ -731,10 +918,14 @@ table_df = table_df[
 table_df["Total"] = table_df.iloc[:, 2:].sum(axis=1)
 table_df["Average"] = table_df.iloc[:, 2:-1].mean(axis=1)
 
-st.dataframe(table_df)
+st.dataframe(
+    table_df,
+    use_container_width=True,
+    hide_index=True
+)
 
 # Footer
-st.markdown("---")
+st.markdown("<div style='height: 1.25rem;'></div>", unsafe_allow_html=True)
 
 # Export section
 st.markdown("## 📥 Export & Share Dashboard")
