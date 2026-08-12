@@ -115,10 +115,33 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+
+
+def read_excel_data(file_path):
+    """Support workbooks whose sheet name is not exactly 'Call Data'."""
+    excel_file = pd.ExcelFile(file_path)
+    sheet_names = excel_file.sheet_names
+
+    preferred_order = ["Call Data", "Data", "Sheet1", "Sheet"]
+    for preferred in preferred_order:
+        if preferred in sheet_names:
+            return pd.read_excel(file_path, sheet_name=preferred)
+
+    for sheet_name in sheet_names:
+        df = pd.read_excel(file_path, sheet_name=sheet_name)
+        if isinstance(df, pd.DataFrame) and not df.empty and len(df.columns) > 0:
+            return df
+
+    raise ValueError(
+        "No valid worksheet found in the Excel file. "
+        "Expected a sheet named 'Call Data' or any data sheet."
+    )
+
+
 # Load data
 @st.cache_data(show_spinner=False)
 def load_data(file_mtime):
-    df = pd.read_excel('Call data 2026.xlsx', sheet_name='Call Data')
+    df = read_excel_data('Call data 2026.xlsx')
     return df
 
 df = load_data(os.path.getmtime('Call data 2026.xlsx'))
