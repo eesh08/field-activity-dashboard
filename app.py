@@ -147,11 +147,12 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.markdown("# Field Activity Dashboard")
-st.markdown("Choose which view you want to open first.")
+st.markdown("Actual Achieved is the current dashboard. Planned will use `data_2` later.")
 
 dashboard_view = st.radio(
     "Select dashboard view",
-    ["Actual Achieved", "Planned"],
+    ["Planned", "Actual Achieved"],
+    index=1,
     horizontal=True,
     label_visibility="collapsed",
 )
