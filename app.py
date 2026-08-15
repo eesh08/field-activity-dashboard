@@ -146,6 +146,24 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+st.markdown("# Field Activity Dashboard")
+st.markdown("Choose which view you want to open first.")
+
+dashboard_view = st.radio(
+    "Select dashboard view",
+    ["Actual Achieved", "Planned"],
+    horizontal=True,
+    label_visibility="collapsed",
+)
+
+if dashboard_view == "Planned":
+    st.markdown("## Planned")
+    st.info(
+        "This page is reserved for the planned coverage view driven by data_2. "
+        "You can tell me the exact metrics and I will build this page next."
+    )
+    st.stop()
+
 import glob
 
 
