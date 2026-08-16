@@ -147,7 +147,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.markdown("# Field Activity Dashboard")
-st.markdown("Actual Achieved is the current dashboard. Planned will use `data_2` later.")
+st.markdown("Actual Achieved is the current dashboard. Planned will use `Data_2`.")
 
 dashboard_view = st.radio(
     "Select dashboard view",
@@ -158,12 +158,9 @@ dashboard_view = st.radio(
 )
 
 if dashboard_view == "Planned":
-    st.markdown("## Planned")
-    st.info(
-        "This page is reserved for the planned coverage view driven by data_2. "
-        "You can tell me the exact metrics and I will build this page next."
-    )
-    st.stop()
+    planned_view_requested = True
+else:
+    planned_view_requested = False
 
 import glob
 
@@ -189,23 +186,31 @@ def read_excel_data(file_path):
     )
 
 
-files = glob.glob("Data/*.xlsx")
+def load_folder_data(folder_path):
+    """Load and concatenate every Excel file in a folder."""
+    files = glob.glob(os.path.join(folder_path, "*.xlsx"))
+    frames = []
 
-df_list = []
+    for file_path in files:
+        frames.append(read_excel_data(file_path))
 
-for file in files:
-    temp_df = read_excel_data(file)
-    df_list.append(temp_df)
+    if not frames:
+        return None
 
-df = pd.concat(df_list, ignore_index=True)
+    return pd.concat(frames, ignore_index=True)
 
-# Function to create Excel export
-def create_excel_report(product_counts, division_filter, month_filter, product_filter, df):
-    """Create an Excel file with dashboard insights"""
+
+df = load_folder_data("Data")
+
+if df is None:
+    st.error("No Excel files were found in the Data folder.")
+    st.stop()
+
+def create_excel_report_two_sheets(report_title, kpi_rows, breakdown_df, monthly_kpi_matrix_df=None):
+    """Create an Excel report with KPI summary, detailed breakdown, and optional KPI matrix."""
     output = BytesIO()
     workbook = xlsxwriter.Workbook(output)
-    
-    # Define formats
+
     header_format = workbook.add_format({
         'bold': True,
         'font_color': 'white',
@@ -215,113 +220,63 @@ def create_excel_report(product_counts, division_filter, month_filter, product_f
         'valign': 'vcenter',
         'font_size': 12
     })
-    
+
     title_format = workbook.add_format({
         'bold': True,
         'font_size': 16,
         'bg_color': '#f0f0f0',
-        'border': 1
+        'border': 1,
+        'align': 'center'
     })
-    
-    subtitle_format = workbook.add_format({
-        'bold': True,
-        'font_size': 12,
-        'bg_color': '#e8e8e8',
-        'border': 1
-    })
-    
+
     data_format = workbook.add_format({
         'border': 1,
         'align': 'center',
         'valign': 'vcenter'
     })
-    
-    progress_format = workbook.add_format({
+
+    text_format = workbook.add_format({
         'border': 1,
-        'num_format': '0'
+        'align': 'left',
+        'valign': 'vcenter'
     })
-    
-    # Create sheets
-    ws_summary = workbook.add_worksheet('Summary')
-    ws_products = workbook.add_worksheet('Product Details')
-    ws_filters = workbook.add_worksheet('Filters Applied')
-    
-    # Summary Sheet
-    ws_summary.set_column('A:A', 25)
-    ws_summary.set_column('B:B', 20)
-    
-    ws_summary.merge_range('A1:B1', 'FIELD ACTIVITY DASHBOARD REPORT', title_format)
-    
-    row = 2
-    ws_summary.write(row, 0, 'Report Generated:', subtitle_format)
-    ws_summary.write(row, 1, pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S'), data_format)
-    
-    row += 2
-    ws_summary.write(row, 0, 'Metric', header_format)
-    ws_summary.write(row, 1, 'Value', header_format)
-    
-    row += 1
-    filtered_df = df.copy()
-    if division_filter:
-        filtered_df = filtered_df[filtered_df['Division'] == division_filter]
-    if month_filter:
-        filtered_df = filtered_df[filtered_df['Month'] == month_filter]
-    if owner_filter: 
-        filtered_df = filtered_df[filtered_df['In-Field Activity: Owner Name'] == owner_filter]
-    
-    metrics = [
-        ('Total Visits', len(filtered_df)),
-        ('Unique Products', len(product_counts)),
-        ('Total Product Discussions', sum(product_counts.values())),
-        ('Avg Products per Visit', round(sum(product_counts.values()) / len(filtered_df), 2) if len(filtered_df) > 0 else 0),
-    ]
-    
-    for label, value in metrics:
-        ws_summary.write(row, 0, label, data_format)
-        ws_summary.write(row, 1, value, data_format)
+
+    ws_kpis = workbook.add_worksheet('KPI Summary')
+    ws_kpis.set_column('A:A', 35)
+    ws_kpis.set_column('B:B', 20)
+
+    ws_kpis.merge_range('A1:B1', report_title, title_format)
+    ws_kpis.write(2, 0, 'Metric', header_format)
+    ws_kpis.write(2, 1, 'Value', header_format)
+
+    row = 3
+    for label, value in kpi_rows:
+        ws_kpis.write(row, 0, label, text_format)
+        ws_kpis.write(row, 1, value, data_format)
         row += 1
-    
-    # Product Details Sheet
-    ws_products.set_column('A:A', 30)
-    ws_products.set_column('B:B', 20)
-    ws_products.set_column('C:C', 20)
-    
-    ws_products.merge_range('A1:C1', 'PRODUCT DISCUSSION ANALYSIS', title_format)
-    
-    row = 2
-    ws_products.write(row, 0, 'Product', header_format)
-    ws_products.write(row, 1, 'Discussions', header_format)
-    ws_products.write(row, 2, 'Rank', header_format)
-    
-    row += 1
-    for idx, (product, count) in enumerate(product_counts.items(), 1):
-        ws_products.write(row, 0, product, data_format)
-        ws_products.write(row, 1, count, progress_format)
-        ws_products.write(row, 2, idx, data_format)
-        row += 1
-    
-    # Filters Applied Sheet
-    ws_filters.set_column('A:A', 25)
-    ws_filters.set_column('B:B', 30)
-    
-    ws_filters.merge_range('A1:B1', 'FILTERS APPLIED', title_format)
-    
-    row = 2
-    ws_filters.write(row, 0, 'Filter Type', header_format)
-    ws_filters.write(row, 1, 'Value', header_format)
-    
-    row += 1
-    filters_applied = [
-        ('Division', division_filter if division_filter else 'All'),
-        ('Month', month_filter if month_filter else 'All'),
-        ('Product', product_filter if product_filter else 'All'),
-    ]
-    
-    for filter_type, filter_value in filters_applied:
-        ws_filters.write(row, 0, filter_type, data_format)
-        ws_filters.write(row, 1, filter_value, data_format)
-        row += 1
-    
+
+    def write_dataframe_sheet(worksheet, dataframe):
+        worksheet.freeze_panes(1, 0)
+
+        for col_idx, column_name in enumerate(dataframe.columns):
+            worksheet.write(0, col_idx, column_name, header_format)
+
+        for row_idx, row_values in enumerate(dataframe.itertuples(index=False), start=1):
+            for col_idx, value in enumerate(row_values):
+                fmt = text_format if isinstance(value, str) else data_format
+                worksheet.write(row_idx, col_idx, value, fmt)
+
+        for col_idx, column_name in enumerate(dataframe.columns):
+            width = max(len(str(column_name)) + 2, 14)
+            worksheet.set_column(col_idx, col_idx, width)
+
+    ws_breakdown = workbook.add_worksheet('Detailed Breakdown')
+    write_dataframe_sheet(ws_breakdown, breakdown_df)
+
+    if monthly_kpi_matrix_df is not None:
+        ws_monthly_matrix = workbook.add_worksheet('Monthly KPI Matrix')
+        write_dataframe_sheet(ws_monthly_matrix, monthly_kpi_matrix_df)
+
     workbook.close()
     output.seek(0)
     return output
@@ -336,7 +291,7 @@ def get_unique_products(df):
         products.update(df[col].dropna().unique())
     return sorted(list(products))
 
-def count_product_discussions(df, product, division=None, month=None):
+def count_product_discussions(df, product, division=None, month=None, owner=None):
     """Count how many times a product was discussed"""
     filtered_df = df.copy()
     
@@ -344,15 +299,15 @@ def count_product_discussions(df, product, division=None, month=None):
         filtered_df = filtered_df[filtered_df['Division'] == division]
     if month:
         filtered_df = filtered_df[filtered_df['Month'] == month]
-    if owner_filter: 
-        filtered_df = filtered_df[filtered_df['In-Field Activity: Owner Name'] == owner_filter]
+    if owner:
+        filtered_df = filtered_df[filtered_df['In-Field Activity: Owner Name'] == owner]
     count = 0
     for col in ['P1', 'P2', 'P3', 'P4']:
         count += (filtered_df[col] == product).sum()
     
     return count
 
-def get_product_counts_by_column(df, division=None, month=None):
+def get_product_counts_by_column(df, division=None, month=None, owner=None):
     """Get counts for each product across all columns"""
     filtered_df = df.copy()
     
@@ -360,8 +315,8 @@ def get_product_counts_by_column(df, division=None, month=None):
         filtered_df = filtered_df[filtered_df['Division'] == division]
     if month:
         filtered_df = filtered_df[filtered_df['Month'] == month]
-    if owner_filter: 
-        filtered_df = filtered_df[filtered_df['In-Field Activity: Owner Name'] == owner_filter]
+    if owner:
+        filtered_df = filtered_df[filtered_df['In-Field Activity: Owner Name'] == owner]
 
     product_counts = {}
     for col in ['P1', 'P2', 'P3', 'P4']:
@@ -371,6 +326,298 @@ def get_product_counts_by_column(df, division=None, month=None):
                 product_counts[product] = product_counts.get(product, 0) + count
     
     return dict(sorted(product_counts.items(), key=lambda x: x[1], reverse=True))
+
+
+def normalize_planned_data(df):
+    """Map the Data_2 planning workbook columns onto the achieved dashboard schema."""
+    rename_map = {
+        'Customer Id': 'Customer ID',
+        'Emloyee Name': 'In-Field Activity: Owner Name',
+        'Employee Name': 'In-Field Activity: Owner Name',
+        'Date of Visit': 'CallDate',
+        'Planned Date': 'PlannedDate',
+        'Prio 1 Product': 'P1',
+        'Prio 2 Product': 'P2',
+        'Prio 3 Product': 'P3',
+        'Prio 4 Product': 'P4',
+    }
+
+    normalized_df = df.rename(columns={source: target for source, target in rename_map.items() if source in df.columns}).copy()
+
+    if 'CallDate' in normalized_df.columns:
+        normalized_df['CallDate'] = pd.to_datetime(normalized_df['CallDate'], errors='coerce', dayfirst=True)
+    if 'PlannedDate' in normalized_df.columns:
+        normalized_df['PlannedDate'] = pd.to_datetime(normalized_df['PlannedDate'], errors='coerce', dayfirst=True)
+
+    # Planned analytics should be date-driven by planned schedule first.
+    if 'PlannedDate' in normalized_df.columns:
+        effective_date = normalized_df['PlannedDate']
+        if 'CallDate' in normalized_df.columns:
+            effective_date = effective_date.fillna(normalized_df['CallDate'])
+        normalized_df['Month'] = effective_date.dt.strftime('%b')
+    elif 'CallDate' in normalized_df.columns:
+        normalized_df['Month'] = normalized_df['CallDate'].dt.strftime('%b')
+
+    return normalized_df
+
+
+def build_detailed_breakdown_table(filtered_df, month_order):
+    """Create the detailed product breakdown table used in UI and exports."""
+    melted_df = filtered_df.melt(
+        id_vars=['Division', 'Month'],
+        value_vars=['P1', 'P2', 'P3', 'P4'],
+        var_name='Position',
+        value_name='Product'
+    )
+
+    melted_df = melted_df.dropna(subset=['Product'])
+
+    table_df = pd.pivot_table(
+        melted_df,
+        index=['Division', 'Product'],
+        columns='Month',
+        aggfunc='size',
+        fill_value=0
+    ).reset_index()
+
+    existing_months = [month for month in month_order if month in table_df.columns]
+    table_df = table_df[["Division", "Product"] + existing_months]
+    table_df["Total"] = table_df.iloc[:, 2:].sum(axis=1)
+    table_df["Average"] = table_df.iloc[:, 2:-1].mean(axis=1)
+    return table_df
+
+
+def build_monthly_kpi_breakdown_table(
+    filtered_df,
+    month_order,
+    include_clm=False,
+    date_column='CallDate',
+    fallback_date_column=None
+):
+    """Create a month-columns KPI matrix with rows per division and KPI."""
+    kpi_names = [
+        'Total Visits',
+        'Unique Products',
+        'Total Discussions',
+        'Unique Doctors',
+        'Avg Products / Visit',
+        'Visits / Rep / Month',
+        'Visits / Rep / Day',
+    ]
+    if include_clm:
+        kpi_names.insert(6, 'Visits with CLM')
+
+    if filtered_df.empty:
+        return pd.DataFrame(columns=['Division', 'KPI'] + month_order)
+
+    working_df = filtered_df.copy()
+    if 'Month' in working_df.columns:
+        working_df['Month'] = pd.Categorical(working_df['Month'], categories=month_order, ordered=True)
+
+    monthly_rows = []
+    grouped = working_df.groupby(['Month', 'Division'], dropna=False, observed=False)
+
+    for (month, division), group_df in grouped:
+        if group_df.empty:
+            continue
+
+        month_value = str(month)
+        if month_value not in month_order:
+            continue
+
+        total_visits = len(group_df)
+        total_reps = group_df['In-Field Activity: Owner Name'].nunique()
+        unique_doctors = group_df['Customer ID'].nunique()
+
+        total_discussions = 0
+        unique_products = set()
+        for col in ['P1', 'P2', 'P3', 'P4']:
+            non_null_products = group_df[col].dropna()
+            total_discussions += non_null_products.shape[0]
+            unique_products.update(non_null_products.unique().tolist())
+
+        avg_products_per_visit = total_discussions / total_visits if total_visits > 0 else 0
+        visits_per_rep_month = total_visits / total_reps if total_reps > 0 else 0
+
+        date_series = group_df[date_column] if date_column in group_df.columns else pd.Series(dtype='datetime64[ns]')
+        if fallback_date_column and fallback_date_column in group_df.columns:
+            date_series = date_series.fillna(group_df[fallback_date_column])
+        unique_days = date_series.nunique()
+        visits_per_rep_day = total_visits / (total_reps * unique_days) if total_reps > 0 and unique_days > 0 else 0
+
+        row = {
+            'Month': month,
+            'Division': division,
+            'Total Visits': total_visits,
+            'Unique Products': len(unique_products),
+            'Total Discussions': total_discussions,
+            'Unique Doctors': unique_doctors,
+            'Avg Products / Visit': round(avg_products_per_visit, 2),
+            'Visits / Rep / Month': round(visits_per_rep_month, 2),
+            'Visits / Rep / Day': round(visits_per_rep_day, 2),
+        }
+
+        if include_clm and 'Call with CLM' in group_df.columns:
+            row['Visits with CLM'] = int((group_df['Call with CLM'] == True).sum())
+
+        monthly_rows.append(row)
+
+    monthly_df = pd.DataFrame(monthly_rows)
+    if monthly_df.empty:
+        return pd.DataFrame(columns=['Division', 'KPI'] + month_order)
+
+    divisions = sorted([str(d) for d in monthly_df['Division'].dropna().unique().tolist()])
+    matrix_rows = []
+
+    for division in divisions:
+        division_df = monthly_df[monthly_df['Division'].astype(str) == division]
+        for kpi_name in kpi_names:
+            matrix_row = {'Division': division, 'KPI': kpi_name}
+            for month in month_order:
+                value_row = division_df[division_df['Month'].astype(str) == month]
+                if value_row.empty:
+                    matrix_row[month] = 0
+                else:
+                    matrix_row[month] = value_row.iloc[0][kpi_name]
+            matrix_rows.append(matrix_row)
+
+    matrix_df = pd.DataFrame(matrix_rows)
+    return matrix_df[['Division', 'KPI'] + month_order]
+
+
+def render_planned_dashboard(df):
+    """Render the planned dashboard using the Data_2 workbook set."""
+    if df is None:
+        st.error("No Excel files were found in the Data_2 folder.")
+        st.stop()
+
+    df = normalize_planned_data(df)
+
+    required_columns = [
+        'Division', 'Month', 'In-Field Activity: Owner Name',
+        'Customer ID', 'CallDate', 'P1', 'P2', 'P3', 'P4'
+    ]
+    missing_columns = [column for column in required_columns if column not in df.columns]
+    if missing_columns:
+        st.error("The planned dashboard still needs these columns after normalization: " + ", ".join(missing_columns))
+        st.stop()
+
+    st.sidebar.markdown("### 🔍 Planned Dashboard Filters")
+    st.sidebar.markdown("---")
+
+    all_divisions = ['All'] + sorted(df['Division'].dropna().unique().tolist())
+    all_months = ['All'] + sorted(df['Month'].dropna().unique().tolist())
+    all_products = ['All'] + get_unique_products(df)
+    all_owners = ['All'] + sorted(df['In-Field Activity: Owner Name'].dropna().unique().tolist())
+
+    selected_division = st.sidebar.selectbox("Division", all_divisions, index=0, key="planned_division")
+    selected_month = st.sidebar.selectbox("Month", all_months, index=0, key="planned_month")
+    selected_product = st.sidebar.selectbox("Product", all_products, index=0, key="planned_product")
+    selected_owner = st.sidebar.selectbox("Representative", all_owners, index=0, key="planned_owner")
+
+    division_filter = None if selected_division == 'All' else selected_division
+    month_filter = None if selected_month == 'All' else selected_month
+    product_filter = None if selected_product == 'All' else selected_product
+    owner_filter = None if selected_owner == 'All' else selected_owner
+    month_order = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+    filtered_df = df.copy()
+    if division_filter:
+        filtered_df = filtered_df[filtered_df['Division'] == division_filter]
+    if month_filter:
+        filtered_df = filtered_df[filtered_df['Month'] == month_filter]
+    if owner_filter:
+        filtered_df = filtered_df[filtered_df['In-Field Activity: Owner Name'] == owner_filter]
+
+    product_counts = get_product_counts_by_column(df, division_filter, month_filter, owner_filter)
+
+    total_visits = len(filtered_df)
+    total_products = len(product_counts)
+    total_discussions = sum(product_counts.values())
+    avg_per_call = total_discussions / total_visits if total_visits > 0 else 0
+    total_doctors = filtered_df['Customer ID'].nunique()
+    total_reps = filtered_df['In-Field Activity: Owner Name'].nunique()
+    total_months = filtered_df['Month'].nunique()
+    visit_average = total_visits / (total_reps * total_months) if total_reps > 0 and total_months > 0 else 0
+    effective_date_series = filtered_df['CallDate']
+    if 'PlannedDate' in filtered_df.columns:
+        effective_date_series = filtered_df['PlannedDate'].fillna(filtered_df['CallDate'])
+    total_call_dates = effective_date_series.nunique()
+    visits_per_rep_day = total_visits / (total_reps * total_call_dates) if total_reps > 0 and total_call_dates > 0 else 0
+
+    st.markdown("# 📊 Planned Dashboard")
+    st.markdown("*Planned coverage metrics using Data_2*")
+    st.markdown("---")
+
+    st.markdown("## 📊 Overall Insights")
+    row1_col1, row1_col2, row1_col3, row1_col4 = st.columns(4)
+    row2_col1, row2_col2, row2_col3 = st.columns(3)
+
+    with row1_col1:
+        st.markdown(f"""<div class="metric-card"><div class="metric-label">📞 Total Visits</div><div class="metric-value">{total_visits:,}</div></div>""", unsafe_allow_html=True)
+    with row1_col2:
+        st.markdown(f"""<div class="metric-card-2"><div class="metric-label">📦 Unique Products</div><div class="metric-value">{total_products:,}</div></div>""", unsafe_allow_html=True)
+    with row1_col3:
+        st.markdown(f"""<div class="metric-card-3"><div class="metric-label">💬 Total Discussions</div><div class="metric-value">{total_discussions:,}</div></div>""", unsafe_allow_html=True)
+    with row1_col4:
+        st.markdown(f"""<div class="metric-card"><div class="metric-label">👨‍⚕️ Unique Doctors</div><div class="metric-value">{total_doctors:,}</div></div>""", unsafe_allow_html=True)
+
+    st.markdown("<div style='height: 0.75rem;'></div>", unsafe_allow_html=True)
+
+    with row2_col1:
+        st.markdown(f"""<div class="metric-card-2"><div class="metric-label">📈 Avg Products / Visit</div><div class="metric-value">{avg_per_call:.2f}</div></div>""", unsafe_allow_html=True)
+    with row2_col2:
+        st.markdown(f"""<div class="metric-card-3"><div class="metric-label">🚗 Visits / Rep / Month</div><div class="metric-value">{visit_average:.2f}</div></div>""", unsafe_allow_html=True)
+    with row2_col3:
+        st.markdown(f"""<div class="metric-card"><div class="metric-label">📅 Visits / Rep / Day</div><div class="metric-value">{visits_per_rep_day:.2f}</div></div>""", unsafe_allow_html=True)
+
+    st.markdown("<div style='height: 1.25rem;'></div>", unsafe_allow_html=True)
+    st.markdown("### 📌 Month-wise KPI Breakdown by Division")
+    planned_monthly_kpi_df = build_monthly_kpi_breakdown_table(
+        filtered_df,
+        month_order,
+        include_clm=False,
+        date_column='PlannedDate',
+        fallback_date_column='CallDate'
+    )
+    st.dataframe(planned_monthly_kpi_df, use_container_width=True, hide_index=True)
+
+    st.markdown("<div style='height: 1.25rem;'></div>", unsafe_allow_html=True)
+    st.markdown("## 📋 Detailed Product Breakdown")
+
+    table_df = build_detailed_breakdown_table(filtered_df, month_order)
+
+    st.dataframe(table_df, use_container_width=True, hide_index=True)
+
+    planned_kpi_rows = [
+        ("Total Visits", total_visits),
+        ("Unique Products", total_products),
+        ("Total Discussions", total_discussions),
+        ("Unique Doctors", total_doctors),
+        ("Avg Products / Visit", round(avg_per_call, 2)),
+        ("Visits / Rep / Month", round(visit_average, 2)),
+        ("Visits / Rep / Day", round(visits_per_rep_day, 2)),
+    ]
+
+    st.markdown("## 📥 Export & Share Dashboard")
+    planned_excel_file = create_excel_report_two_sheets(
+        "PLANNED DASHBOARD REPORT",
+        planned_kpi_rows,
+        table_df,
+        monthly_kpi_matrix_df=planned_monthly_kpi_df
+    )
+    st.download_button(
+        label="📊 Download Planned Excel Report",
+        data=planned_excel_file,
+        file_name="Planned_Dashboard_Report.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+    st.stop()
+
+
+if planned_view_requested:
+    render_planned_dashboard(load_folder_data("Data_2"))
 
 # Sidebar - Filters
 st.sidebar.markdown("### 🔍 Dashboard Filters")
@@ -422,7 +669,7 @@ if filter_text:
 # Get product counts based on filters
 if product_filter:
     # Show detailed metrics for selected product
-    count = count_product_discussions(df, product_filter, division_filter, month_filter)
+    count = count_product_discussions(df, product_filter, division_filter, month_filter, owner_filter)
     
     st.markdown(f"## 📦 Insights for **{product_filter}**")
     
@@ -481,7 +728,7 @@ if product_filter:
 
 else:
     # Show overall metrics
-    product_counts = get_product_counts_by_column(df, division_filter, month_filter)
+    product_counts = get_product_counts_by_column(df, division_filter, month_filter, owner_filter)
     
 # Calculate metrics
 filtered_df = df.copy()
@@ -602,6 +849,16 @@ with row2_col4:
     """, unsafe_allow_html=True)
 
 st.markdown("<div style='height: 1.25rem;'></div>", unsafe_allow_html=True)
+st.markdown("### 📌 Month-wise KPI Breakdown by Division")
+actual_monthly_kpi_df = build_monthly_kpi_breakdown_table(
+    filtered_df,
+    month_order,
+    include_clm=True,
+    date_column='CallDate'
+)
+st.dataframe(actual_monthly_kpi_df, use_container_width=True, hide_index=True)
+
+st.markdown("<div style='height: 1.25rem;'></div>", unsafe_allow_html=True)
 
 # Charts section
 if product_filter:
@@ -654,7 +911,7 @@ if product_filter:
         if not division_filter:
             count_by_div = {}
             for div in df['Division'].unique():
-                count_by_div[div] = count_product_discussions(df, product_filter, div, month_filter)
+                count_by_div[div] = count_product_discussions(df, product_filter, div, month_filter, owner_filter)
             
             fig_div = go.Figure(data=[
                 go.Bar(
@@ -683,7 +940,7 @@ if product_filter:
             if not month_filter:
                 count_by_month = {}
                 for mon in sorted(df['Month'].unique()):
-                    count_by_month[mon] = count_product_discussions(df, product_filter, division_filter, mon)
+                    count_by_month[mon] = count_product_discussions(df, product_filter, division_filter, mon, owner_filter)
                 
                 fig_month = go.Figure(data=[
                     go.Bar(
@@ -712,7 +969,7 @@ else:
     # Overall product analysis
     st.markdown("## 📊 Product Discussion Analysis")
     
-    product_counts = get_product_counts_by_column(df, division_filter, month_filter)
+    product_counts = get_product_counts_by_column(df, division_filter, month_filter, owner_filter)
     
     # Top products chart
     col1, col2 = st.columns([3, 1])
@@ -914,7 +1171,7 @@ st.markdown("<div style='height: 1.25rem;'></div>", unsafe_allow_html=True)
 st.markdown("## 📋 Detailed Product Breakdown")
 
 
-product_counts =  get_product_counts_by_column(df, division_filter, month_filter)
+product_counts =  get_product_counts_by_column(df, division_filter, month_filter, owner_filter)
 filtered_df = df.copy()
 
 if division_filter:
@@ -932,32 +1189,7 @@ if owner_filter:
         filtered_df['In-Field Activity: Owner Name'] == owner_filter
     ]
 
-melted_df = filtered_df.melt(
-    id_vars=['Division', 'Month'],
-    value_vars=['P1', 'P2', 'P3', 'P4'],
-    var_name='Position',
-    value_name='Product'
-)
-
-melted_df = melted_df.dropna(subset=['Product'])
-
-table_df = pd.pivot_table(
-    melted_df,
-    index=['Division', 'Product'],
-    columns='Month',
-    aggfunc='size',
-    fill_value=0
-).reset_index()
-
-
-existing_months = [month for month in month_order if month in table_df.columns]
-
-table_df = table_df[
-    ["Division", "Product"] + existing_months
-]
-
-table_df["Total"] = table_df.iloc[:, 2:].sum(axis=1)
-table_df["Average"] = table_df.iloc[:, 2:-1].mean(axis=1)
+table_df = build_detailed_breakdown_table(filtered_df, month_order)
 
 st.dataframe(
     table_df,
@@ -971,7 +1203,7 @@ st.markdown("<div style='height: 1.25rem;'></div>", unsafe_allow_html=True)
 # Export section
 st.markdown("## 📥 Export & Share Dashboard")
 
-product_counts = get_product_counts_by_column(df, division_filter, month_filter)
+product_counts = get_product_counts_by_column(df, division_filter, month_filter, owner_filter)
 filtered_df = df.copy()
 if division_filter:
     filtered_df = filtered_df[filtered_df['Division'] == division_filter]
@@ -994,7 +1226,22 @@ col1, col2, col3 = st.columns(3)
 
 with col1:
     # Excel Export
-    excel_file = create_excel_report(product_counts, division_filter, month_filter, product_filter, df)
+    actual_kpi_rows = [
+        ("Total Visits", total_visits),
+        ("Unique Products", total_products),
+        ("Total Discussions", total_discussions),
+        ("Unique Doctors", total_doctors),
+        ("Avg Products / Visit", round(avg_per_call, 2)),
+        ("Visits / Rep / Month", round(visit_average, 2)),
+        ("Visits with CLM", total_clm_visits),
+        ("Visits / Rep / Day", round(visits_per_rep_day, 2)),
+    ]
+    excel_file = create_excel_report_two_sheets(
+        "ACTUAL ACHIEVED DASHBOARD REPORT",
+        actual_kpi_rows,
+        table_df,
+        monthly_kpi_matrix_df=actual_monthly_kpi_df
+    )
     st.download_button(
         label="📊 Download Excel Report",
         data=excel_file,
