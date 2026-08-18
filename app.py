@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 import streamlit as st
 import pandas as pd
@@ -164,6 +165,8 @@ else:
 
 import glob
 
+ROOT_DIR = Path(__file__).resolve().parent
+
 
 def read_excel_data(file_path):
     """Read an Excel file even when the sheet name is not exactly 'Call Data'."""
@@ -186,24 +189,45 @@ def read_excel_data(file_path):
     )
 
 
+@st.cache_data(show_spinner=False, ttl=3600)
 def load_folder_data(folder_path):
-    """Load and concatenate every Excel file in a folder."""
-    files = glob.glob(os.path.join(folder_path, "*.xlsx"))
+    """Load and concatenate every Excel file in a folder using project-relative paths."""
+    folder = Path(folder_path)
+    if not folder.is_absolute():
+        folder = ROOT_DIR / folder
+
+    files = sorted(folder.glob("*.xlsx")) + sorted(folder.glob("*.xls"))
     frames = []
 
     for file_path in files:
-        frames.append(read_excel_data(file_path))
+        try:
+            frames.append(read_excel_data(file_path))
+        except Exception:
+            continue
 
     if not frames:
         return None
 
-    return pd.concat(frames, ignore_index=True)
+    combined = pd.concat(frames, ignore_index=True, sort=False)
+    return combined
 
 
-df = load_folder_data("Data")
+def resolve_data_source():
+    """Prefer Data, then fallback to Data_2 if Data is missing or empty."""
+    for folder_name in ["Data", "Data_2"]:
+        folder_path = ROOT_DIR / folder_name
+        if folder_path.exists():
+            df = load_folder_data(folder_path)
+            if df is not None and not df.empty:
+                return df
+
+    return None
+
+
+df = resolve_data_source()
 
 if df is None:
-    st.error("No Excel files were found in the Data folder.")
+    st.error("No Excel files were found in the Data or Data_2 folders.")
     st.stop()
 
 def create_excel_report_two_sheets(report_title, kpi_rows, breakdown_df, monthly_kpi_matrix_df=None):
