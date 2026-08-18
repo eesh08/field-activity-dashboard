@@ -988,28 +988,33 @@ else:
             go.Pie(
                 labels=list(top_products.keys()),
                 values=list(top_products.values()),
-                textinfo="label+percent",
-                 hoverinfo="label+value+percent",
+                texttemplate="%{label}<br>%{value:,} (%{percent:.0%})",
+                hovertemplate="<b>%{label}</b><br>Discussions: %{value:,}<br>Share: %{percent:.0%}<extra></extra>",
                 marker=dict(
-                colors=[
-                    "#2563EB",   # Blue
-                    "#10B981",   # Green
-                    "#F59E0B",   # Amber
-                    "#8B5CF6",   # Purple
-                    "#EF4444",   # Red
-                    "#9CA3AF"    # Grey (Others)
-        ]
-    )
-)
+                    colors=[
+                        "#2563EB",   # Blue
+                        "#10B981",   # Green
+                        "#F59E0B",   # Amber
+                        "#8B5CF6",   # Purple
+                        "#EF4444",   # Red
+                        "#9CA3AF"    # Grey (Others)
+                    ]
+                )
+            )
         ])
         fig_top.update_layout(
             title=f"Top {top_n} Products by Discussion",
             height=500,
             showlegend=False,
             template='plotly_white',
-            
         )
         st.plotly_chart(fig_top, use_container_width=True)
+
+        total_product_discussions = sum(top_products.values())
+        st.markdown("#### 📊 Discussion Breakdown")
+        for label, value in top_products.items():
+            share = (value / total_product_discussions * 100) if total_product_discussions else 0
+            st.markdown(f"- **{label}:** {value:,} discussions (**{share:.0f}%**) of the selected total")
     
     with col2:
         st.markdown("### 📈 Product Statistics")
