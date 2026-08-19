@@ -213,7 +213,8 @@ def load_folder_data(folder_path):
 
 
 def resolve_data_source():
-    """Prefer Data, then fallback to Data_2 if Data is missing or empty."""
+    """Prefer Data, then fallback to Data_2
+      if Data is missing or empty."""
     for folder_name in ["Data", "Data_2"]:
         folder_path = ROOT_DIR / folder_name
         if folder_path.exists():
@@ -229,6 +230,24 @@ df = resolve_data_source()
 if df is None:
     st.error("No Excel files were found in the Data or Data_2 folders.")
     st.stop()
+
+MONTH_ORDER = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul"]
+
+
+def ordered_months(values):
+    """Return months in calendar order, preserving any extra unseen values after the standard list."""
+    ordered = []
+    seen = set()
+    for month in MONTH_ORDER:
+        if month in values and month not in seen:
+            ordered.append(month)
+            seen.add(month)
+    for month in values:
+        if month not in seen:
+            ordered.append(month)
+            seen.add(month)
+    return ordered
+
 
 def create_excel_report_two_sheets(report_title, kpi_rows, breakdown_df, monthly_kpi_matrix_df=None, product_position_df=None):
     """Create an Excel report with KPI summary, detailed breakdown, KPI matrix, and product position matrix."""
@@ -459,7 +478,9 @@ def build_product_position_matrix(filtered_df, month_order):
 
     position_matrix = position_matrix[['Division', 'Month', 'Product', 'P1', 'P2', 'P3', 'P4']].copy()
     position_matrix['Total Discussions'] = position_matrix[['P1', 'P2', 'P3', 'P4']].sum(axis=1)
+    position_matrix['Month'] = pd.Categorical(position_matrix['Month'], categories=month_order, ordered=True)
     position_matrix = position_matrix.sort_values(['Division', 'Month', 'Total Discussions', 'Product'], ascending=[True, True, False, True]).reset_index(drop=True)
+    position_matrix['Month'] = position_matrix['Month'].astype(str)
     return position_matrix
 
 
@@ -583,7 +604,7 @@ def render_planned_dashboard(df):
     st.sidebar.markdown("---")
 
     all_divisions = ['All'] + sorted(df['Division'].dropna().unique().tolist())
-    all_months = ['All'] + sorted(df['Month'].dropna().unique().tolist())
+    all_months = ['All'] + ordered_months(df['Month'].dropna().unique().tolist())
     all_products = ['All'] + get_unique_products(df)
     all_owners = ['All'] + sorted(df['In-Field Activity: Owner Name'].dropna().unique().tolist())
 
@@ -596,7 +617,7 @@ def render_planned_dashboard(df):
     month_filter = None if selected_month == 'All' else selected_month
     product_filter = None if selected_product == 'All' else selected_product
     owner_filter = None if selected_owner == 'All' else selected_owner
-    month_order = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    month_order = MONTH_ORDER
 
     filtered_df = df.copy()
     if division_filter:
@@ -707,7 +728,7 @@ st.sidebar.markdown("### 🔍 Dashboard Filters")
 st.sidebar.markdown("---")
 
 all_divisions = ['All'] + sorted(df['Division'].unique().tolist())
-all_months = ['All'] + sorted(df['Month'].unique().tolist())
+all_months = ['All'] + ordered_months(df['Month'].dropna().unique().tolist())
 unique_products = get_unique_products(df)
 all_products = ['All'] + unique_products
 all_owners = ['All'] + sorted(df['In-Field Activity: Owner Name'].unique().tolist())
@@ -723,10 +744,7 @@ month_filter = None if selected_month == 'All' else selected_month
 product_filter = None if selected_product == 'All' else selected_product
 owner_filter = None if selected_owner == 'All' else selected_owner
 
-month_order = [
-    "Jan", "Feb", "Mar", "Apr", "May",
-    "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-]
+month_order = MONTH_ORDER
 
 # Main title
 st.markdown("# 📊 Field Activity Dashboard")
@@ -1022,8 +1040,9 @@ if product_filter:
             # Count by month
             if not month_filter:
                 count_by_month = {}
-                for mon in sorted(df['Month'].unique()):
-                    count_by_month[mon] = count_product_discussions(df, product_filter, division_filter, mon, owner_filter)
+                for mon in month_order:
+                    if mon in df['Month'].unique():
+                        count_by_month[mon] = count_product_discussions(df, product_filter, division_filter, mon, owner_filter)
                 
                 fig_month = go.Figure(data=[
                     go.Bar(
