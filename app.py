@@ -1180,6 +1180,66 @@ else:
         for label, value in top_products.items():
             share = (value / total_product_discussions * 100) if total_product_discussions else 0
             st.markdown(f"- **{label}:** {value:,} discussions (**{share:.0f}%**) of the selected total")
+
+        if filtered_df.empty:
+            average_product_counts = {}
+        else:
+            months_in_scope = [m for m in month_order if m in filtered_df['Month'].dropna().unique().tolist()]
+            if not months_in_scope:
+                months_in_scope = [m for m in filtered_df['Month'].dropna().unique().tolist()]
+            if not months_in_scope:
+                average_product_counts = {}
+            else:
+                monthly_product_totals = {}
+                for mon in months_in_scope:
+                    monthly_df = filtered_df[filtered_df['Month'] == mon].copy()
+                    monthly_product_totals[mon] = get_product_counts_by_column(monthly_df, division_filter, mon, owner_filter)
+
+                average_product_counts = {}
+                all_products = sorted({p for counts in monthly_product_totals.values() for p in counts.keys()})
+                for product in all_products:
+                    average_product_counts[product] = sum(monthly_product_totals.get(mon, {}).get(product, 0) for mon in months_in_scope) / len(months_in_scope)
+                average_product_counts = dict(sorted(average_product_counts.items(), key=lambda x: x[1], reverse=True))
+
+        if average_product_counts:
+            st.markdown("#### 📊 Average Monthly Product Share")
+            avg_top_n = min(5, len(average_product_counts))
+            avg_top_products = dict(list(average_product_counts.items())[:avg_top_n])
+            avg_others_count = sum(list(average_product_counts.values())[avg_top_n:])
+            if avg_others_count > 0:
+                avg_top_products["Others"] = avg_others_count
+
+            avg_fig = go.Figure(data=[
+                go.Pie(
+                    labels=list(avg_top_products.keys()),
+                    values=list(avg_top_products.values()),
+                    texttemplate="%{label}<br>%{value:.0f} avg (%{percent:.0%})",
+                    hovertemplate="<b>%{label}</b><br>Average discussions/month: %{value:.1f}<br>Share: %{percent:.0%}<extra></extra>",
+                    marker=dict(
+                        colors=[
+                            "#2563EB",
+                            "#10B981",
+                            "#F59E0B",
+                            "#8B5CF6",
+                            "#EF4444",
+                            "#9CA3AF"
+                        ]
+                    )
+                )
+            ])
+            avg_fig.update_layout(
+                title=f"Average Monthly Product Share",
+                height=500,
+                showlegend=False,
+                template='plotly_white',
+            )
+            st.plotly_chart(avg_fig, use_container_width=True)
+
+            avg_total = sum(avg_top_products.values())
+            st.markdown("#### 📊 Average Monthly Breakdown")
+            for label, value in avg_top_products.items():
+                avg_share = (value / avg_total * 100) if avg_total else 0
+                st.markdown(f"- **{label}:** {value:.1f} avg discussions/month (**{avg_share:.0f}%**)" )
     
     with col2:
         st.markdown("### 📈 Product Statistics")
