@@ -249,8 +249,8 @@ def ordered_months(values):
     return ordered
 
 
-def create_excel_report_two_sheets(report_title, kpi_rows, breakdown_df, monthly_kpi_matrix_df=None, product_position_df=None):
-    """Create an Excel report with KPI summary, detailed breakdown, KPI matrix, and product position matrix."""
+def create_excel_report_two_sheets(report_title, kpi_rows, breakdown_df, monthly_kpi_matrix_df=None, product_position_df=None, employee_product_df=None):
+    """Create an Excel report with KPI summary, detailed breakdown, KPI matrix, product position matrix, and employee matrix."""
     output = BytesIO()
     workbook = xlsxwriter.Workbook(output)
 
@@ -324,6 +324,10 @@ def create_excel_report_two_sheets(report_title, kpi_rows, breakdown_df, monthly
         ws_product_position = workbook.add_worksheet('Product Position Matrix')
         write_dataframe_sheet(ws_product_position, product_position_df)
 
+    if employee_product_df is not None:
+        ws_employee_product = workbook.add_worksheet('Employee Product Matrix')
+        write_dataframe_sheet(ws_employee_product, employee_product_df)
+
     workbook.close()
     output.seek(0)
     return output
@@ -384,6 +388,7 @@ def normalize_planned_data(df):
     """Map the Data_2 planning workbook columns onto the achieved dashboard schema."""
     rename_map = {
         'Customer Id': 'Customer ID',
+        'EmployeeID': 'Employee Code',
         'Emloyee Name': 'In-Field Activity: Owner Name',
         'Employee Name': 'In-Field Activity: Owner Name',
         'Date of Visit': 'CallDate',
@@ -441,7 +446,6 @@ def build_detailed_breakdown_table(filtered_df, month_order):
 
 
 @st.cache_data(show_spinner=False, ttl=3600)
-@st.cache_data(show_spinner=False, ttl=3600)
 def build_product_position_matrix(filtered_df, month_order):
     """Return product counts by P1/P2/P3/P4, division and month for dashboard and export."""
     if filtered_df.empty:
@@ -482,6 +486,59 @@ def build_product_position_matrix(filtered_df, month_order):
     position_matrix = position_matrix.sort_values(['Division', 'Month', 'Total Discussions', 'Product'], ascending=[True, True, False, True]).reset_index(drop=True)
     position_matrix['Month'] = position_matrix['Month'].astype(str)
     return position_matrix
+
+
+@st.cache_data(show_spinner=False, ttl=3600)
+def build_employee_product_matrix(filtered_df):
+    """Return counts for each employee/product across P1-P4 with division and employee code."""
+    if filtered_df.empty:
+        return pd.DataFrame(columns=['Division', 'Employee Name', 'Employee Code', 'Product', 'P1', 'P2', 'P3', 'P4', 'Total Discussions'])
+
+    employee_name_col = 'In-Field Activity: Owner Name' if 'In-Field Activity: Owner Name' in filtered_df.columns else None
+    employee_code_col = 'Employee Code' if 'Employee Code' in filtered_df.columns else None
+
+    working_df = filtered_df.copy()
+    if employee_name_col is None:
+        working_df['Employee Name'] = 'Unknown'
+        employee_name_col = 'Employee Name'
+    if employee_code_col is None:
+        working_df['Employee Code'] = ''
+        employee_code_col = 'Employee Code'
+
+    melted_df = working_df[['Division', employee_name_col, employee_code_col, 'P1', 'P2', 'P3', 'P4']].copy()
+    melted_df = melted_df.rename(columns={employee_name_col: 'Employee Name', employee_code_col: 'Employee Code'})
+    melted_df = melted_df.melt(
+        id_vars=['Division', 'Employee Name', 'Employee Code'],
+        value_vars=['P1', 'P2', 'P3', 'P4'],
+        var_name='Position',
+        value_name='Product'
+    )
+    melted_df = melted_df.dropna(subset=['Product'])
+    if melted_df.empty:
+        return pd.DataFrame(columns=['Division', 'Employee Name', 'Employee Code', 'Product', 'P1', 'P2', 'P3', 'P4', 'Total Discussions'])
+
+    pivot_df = (
+        melted_df.groupby(['Division', 'Employee Name', 'Employee Code', 'Product', 'Position'], dropna=False, observed=False)
+        .size()
+        .reset_index(name='Count')
+    )
+
+    employee_matrix = pivot_df.pivot_table(
+        index=['Division', 'Employee Name', 'Employee Code', 'Product'],
+        columns='Position',
+        values='Count',
+        aggfunc='sum',
+        fill_value=0
+    ).reset_index()
+
+    for pos in ['P1', 'P2', 'P3', 'P4']:
+        if pos not in employee_matrix.columns:
+            employee_matrix[pos] = 0
+
+    employee_matrix = employee_matrix[['Division', 'Employee Name', 'Employee Code', 'Product', 'P1', 'P2', 'P3', 'P4']].copy()
+    employee_matrix['Total Discussions'] = employee_matrix[['P1', 'P2', 'P3', 'P4']].sum(axis=1)
+    employee_matrix = employee_matrix.sort_values(['Division', 'Employee Name', 'Employee Code', 'Total Discussions', 'Product'], ascending=[True, True, True, False, True]).reset_index(drop=True)
+    return employee_matrix
 
 
 @st.cache_data(show_spinner=False, ttl=3600)
@@ -691,6 +748,10 @@ def render_planned_dashboard(df):
     planned_product_matrix = build_product_position_matrix(filtered_df, month_order)
     st.dataframe(planned_product_matrix.head(200), use_container_width=True, hide_index=True)
 
+    st.markdown("### 👥 Employee Product Matrix by Division")
+    planned_employee_matrix = build_employee_product_matrix(filtered_df)
+    st.dataframe(planned_employee_matrix.head(200), use_container_width=True, hide_index=True)
+
     planned_kpi_rows = [
         ("Total Visits", total_visits),
         ("Unique Products", total_products),
@@ -703,12 +764,14 @@ def render_planned_dashboard(df):
 
     st.markdown("## 📥 Export & Share Dashboard")
     planned_product_matrix = build_product_position_matrix(filtered_df, month_order)
+    planned_employee_matrix = build_employee_product_matrix(filtered_df)
     planned_excel_file = create_excel_report_two_sheets(
         "PLANNED DASHBOARD REPORT",
         planned_kpi_rows,
         table_df,
         monthly_kpi_matrix_df=planned_monthly_kpi_df,
-        product_position_df=planned_product_matrix
+        product_position_df=planned_product_matrix,
+        employee_product_df=planned_employee_matrix
     )
     st.download_button(
         label="📊 Download Planned Excel Report",
@@ -1312,6 +1375,14 @@ st.dataframe(
     hide_index=True
 )
 
+st.markdown("### 👥 Employee Product Matrix by Division")
+employee_product_matrix = build_employee_product_matrix(filtered_df)
+st.dataframe(
+    employee_product_matrix.head(200),
+    use_container_width=True,
+    hide_index=True
+)
+
 # Footer
 st.markdown("<div style='height: 1.25rem;'></div>", unsafe_allow_html=True)
 
@@ -1352,12 +1423,14 @@ with col1:
         ("Visits / Rep / Day", round(visits_per_rep_day, 2)),
     ]
     actual_product_matrix = build_product_position_matrix(filtered_df, month_order)
+    actual_employee_matrix = build_employee_product_matrix(filtered_df)
     excel_file = create_excel_report_two_sheets(
         "ACTUAL ACHIEVED DASHBOARD REPORT",
         actual_kpi_rows,
         table_df,
         monthly_kpi_matrix_df=actual_monthly_kpi_df,
-        product_position_df=actual_product_matrix
+        product_position_df=actual_product_matrix,
+        employee_product_df=actual_employee_matrix
     )
     st.download_button(
         label="📊 Download Excel Report",
