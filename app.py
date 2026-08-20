@@ -325,7 +325,7 @@ def create_excel_report_two_sheets(report_title, kpi_rows, breakdown_df, monthly
         write_dataframe_sheet(ws_product_position, product_position_df)
 
     if employee_product_df is not None:
-        ws_employee_product = workbook.add_worksheet('Employee Product Matrix')
+        ws_employee_product = workbook.add_worksheet('Emp Product Division')
         write_dataframe_sheet(ws_employee_product, employee_product_df)
 
     workbook.close()
