@@ -1213,7 +1213,7 @@ else:
                 go.Pie(
                     labels=list(avg_top_products.keys()),
                     values=list(avg_top_products.values()),
-                    texttemplate="%{label}<br>%{value:.0f} avg (%{percent:.0%})",
+                    texttemplate="%{label}<br>%{value:.0f} (%{percent:.0%})",
                     hovertemplate="<b>%{label}</b><br>Average discussions/month: %{value:.1f}<br>Share: %{percent:.0%}<extra></extra>",
                     marker=dict(
                         colors=[
