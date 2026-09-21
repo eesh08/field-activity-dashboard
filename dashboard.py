@@ -7,6 +7,7 @@ import numpy as np
 import os
 from io import BytesIO
 import xlsxwriter
+from pathlib import Path
 from datetime import datetime
 
 # Page configuration
@@ -138,14 +139,39 @@ def read_excel_data(file_path):
     )
 
 
-# Load data
+# Load data from the Data folder (concatenate all Excel files found)
 @st.cache_data(show_spinner=False)
-def load_data(file_mtime):
-    df = read_excel_data('Call data 2026.xlsx')
-    return df
+def load_data_from_folder(folder_name="Data", folder_mtime=None):
+    # folder_mtime is used only to bust the Streamlit cache when files change
+    folder = Path(folder_name)
+    if not folder.is_absolute():
+        folder = Path(__file__).resolve().parent / folder
 
-df = load_data(os.path.getmtime('Call data 2026.xlsx'))
+    files = sorted(folder.glob("*.xlsx")) + sorted(folder.glob("*.xls"))
+    frames = []
+    for file_path in files:
+        try:
+            frames.append(read_excel_data(file_path))
+        except Exception:
+            continue
 
+    if not frames:
+        st.error(f"No Excel files were found in the `{folder_name}` folder.")
+        st.stop()
+
+    combined = pd.concat(frames, ignore_index=True, sort=False)
+    return combined
+
+
+# Compute latest mtime to use as cache key so new uploads invalidate cache.
+data_folder = Path("Data")
+if not data_folder.is_absolute():
+    data_folder = Path(__file__).resolve().parent / data_folder
+
+mtimes = [f.stat().st_mtime for f in list(data_folder.glob("*.xlsx")) + list(data_folder.glob("*.xls"))]
+latest_mtime = max(mtimes) if mtimes else None
+
+df = load_data_from_folder("Data", folder_mtime=latest_mtime)
 # Create Excel export
 def create_excel_report_with_slicers(combined_product_counts, div_product_counts, division_filter, month_filter, product_filter, df):
     """Create professional Excel report (combined, no CLM split)"""
