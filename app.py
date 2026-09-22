@@ -190,7 +190,7 @@ def read_excel_data(file_path):
 
 
 @st.cache_data(show_spinner=False, ttl=3600)
-def load_folder_data(folder_path):
+def load_folder_data(folder_path, file_signature=None):
     """Load and concatenate every Excel file in a folder using project-relative paths."""
     folder = Path(folder_path)
     if not folder.is_absolute():
@@ -212,13 +212,22 @@ def load_folder_data(folder_path):
     return combined
 
 
+def folder_file_signature(folder_path):
+    """Return a cache key that changes when workbook contents or membership changes."""
+    folder = Path(folder_path)
+    if not folder.is_absolute():
+        folder = ROOT_DIR / folder
+    files = sorted(folder.glob("*.xlsx")) + sorted(folder.glob("*.xls"))
+    return tuple((file.name, file.stat().st_mtime_ns, file.stat().st_size) for file in files)
+
+
 def resolve_data_source():
     """Prefer Data, then fallback to Data_2
       if Data is missing or empty."""
     for folder_name in ["Data", "Data_2"]:
         folder_path = ROOT_DIR / folder_name
         if folder_path.exists():
-            df = load_folder_data(folder_path)
+            df = load_folder_data(folder_path, folder_file_signature(folder_path))
             if df is not None and not df.empty:
                 return df
 
@@ -231,7 +240,7 @@ if df is None:
     st.error("No Excel files were found in the Data or Data_2 folders.")
     st.stop()
 
-MONTH_ORDER = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul"]
+MONTH_ORDER = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
 
 def ordered_months(values):
@@ -801,7 +810,7 @@ def render_planned_dashboard(df):
 
 
 if planned_view_requested:
-    render_planned_dashboard(load_folder_data("Data_2"))
+    render_planned_dashboard(load_folder_data("Data_2", folder_file_signature("Data_2")))
 
 # Sidebar - Filters
 st.sidebar.markdown("### 🔍 Dashboard Filters")

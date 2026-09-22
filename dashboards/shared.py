@@ -5,7 +5,7 @@ import streamlit as st
 import xlsxwriter
 import numpy as np
 
-MONTH_ORDER = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul"]
+MONTH_ORDER = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
 
 def ordered_months(values):
