@@ -249,6 +249,22 @@ def ordered_months(values):
     return ordered
 
 
+def _excel_cell_value(value):
+    if pd.isna(value):
+        return None
+    if isinstance(value, pd.Timestamp):
+        return value.to_pydatetime()
+    if isinstance(value, pd.Timedelta):
+        return value.to_pytimedelta()
+    if isinstance(value, np.generic):
+        return value.item()
+    if isinstance(value, (bytes, bytearray)):
+        return value.decode(errors='replace')
+    if isinstance(value, (list, dict, set, tuple)):
+        return str(value)
+    return value
+
+
 def create_excel_report_two_sheets(report_title, kpi_rows, breakdown_df, monthly_kpi_matrix_df=None, product_position_df=None, employee_product_df=None):
     """Create an Excel report with KPI summary, detailed breakdown, KPI matrix, product position matrix, and employee matrix."""
     output = BytesIO()
@@ -294,20 +310,21 @@ def create_excel_report_two_sheets(report_title, kpi_rows, breakdown_df, monthly
 
     row = 3
     for label, value in kpi_rows:
-        ws_kpis.write(row, 0, label, text_format)
-        ws_kpis.write(row, 1, value, data_format)
+        ws_kpis.write(row, 0, _excel_cell_value(label), text_format)
+        ws_kpis.write(row, 1, _excel_cell_value(value), data_format)
         row += 1
 
     def write_dataframe_sheet(worksheet, dataframe):
         worksheet.freeze_panes(1, 0)
 
         for col_idx, column_name in enumerate(dataframe.columns):
-            worksheet.write(0, col_idx, column_name, header_format)
+            worksheet.write(0, col_idx, _excel_cell_value(column_name), header_format)
 
         for row_idx, row_values in enumerate(dataframe.itertuples(index=False), start=1):
             for col_idx, value in enumerate(row_values):
-                fmt = text_format if isinstance(value, str) else data_format
-                worksheet.write(row_idx, col_idx, value, fmt)
+                normalized_value = _excel_cell_value(value)
+                fmt = text_format if isinstance(normalized_value, str) else data_format
+                worksheet.write(row_idx, col_idx, normalized_value, fmt)
 
         for col_idx, column_name in enumerate(dataframe.columns):
             width = max(len(str(column_name)) + 2, 14)
