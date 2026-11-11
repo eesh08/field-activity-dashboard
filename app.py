@@ -274,7 +274,7 @@ def _excel_cell_value(value):
     return value
 
 
-def create_excel_report_two_sheets(report_title, kpi_rows, breakdown_df, monthly_kpi_matrix_df=None, product_position_df=None, employee_product_df=None, speciality_activity_df=None):
+def create_excel_report_two_sheets(report_title, kpi_rows, breakdown_df, monthly_kpi_matrix_df=None, product_position_df=None, employee_product_df=None, speciality_activity_df=None, speciality_activity_2_df=None):
     """Create an Excel report with dashboard tables and optional activity analysis."""
     output = BytesIO()
     workbook = xlsxwriter.Workbook(output)
@@ -357,6 +357,10 @@ def create_excel_report_two_sheets(report_title, kpi_rows, breakdown_df, monthly
     if speciality_activity_df is not None:
         ws_speciality_activity = workbook.add_worksheet('Speciality Activity')
         write_dataframe_sheet(ws_speciality_activity, speciality_activity_df)
+
+    if speciality_activity_2_df is not None:
+        ws_speciality_activity_2 = workbook.add_worksheet('Activity Analysis Speciality 2')
+        write_dataframe_sheet(ws_speciality_activity_2, speciality_activity_2_df)
 
     workbook.close()
     output.seek(0)
@@ -740,6 +744,33 @@ def build_speciality_activity_table(filtered_df, date_column='CallDate', fallbac
     return pd.DataFrame(rows, columns=base_columns + specialty_columns)
 
 
+@st.cache_data(show_spinner=False, ttl=3600)
+def build_speciality_activity_table_2(filtered_df, date_column='CallDate', fallback_date_column=None):
+    """Build the speciality activity matrix with visits and doctors averaged by selected months."""
+    activity_df = build_speciality_activity_table(filtered_df, date_column, fallback_date_column).copy()
+    if activity_df.empty:
+        return activity_df
+
+    if 'Month' in filtered_df.columns:
+        month_count = filtered_df['Month'].dropna().nunique()
+    else:
+        date_series = filtered_df[date_column] if date_column in filtered_df.columns else pd.Series(dtype='datetime64[ns]')
+        if fallback_date_column and fallback_date_column in filtered_df.columns:
+            date_series = date_series.fillna(filtered_df[fallback_date_column])
+        month_count = pd.to_datetime(date_series, errors='coerce').dt.to_period('M').nunique()
+    month_count = max(int(month_count), 1)
+
+    activity_df.loc[activity_df['Metric'] == 'No. of Visits', 'Metric'] = 'Average No. of Visits'
+    activity_df.loc[activity_df['Metric'] == 'Doctors Met', 'Metric'] = 'Average Doctors Met'
+    activity_df.loc[activity_df['Metric'] == 'Average No. of Visits', activity_df.columns[2:]] = (
+        activity_df.loc[activity_df['Metric'] == 'Average No. of Visits', activity_df.columns[2:]] / month_count
+    ).round(2)
+    activity_df.loc[activity_df['Metric'] == 'Average Doctors Met', activity_df.columns[2:]] = (
+        activity_df.loc[activity_df['Metric'] == 'Average Doctors Met', activity_df.columns[2:]] / month_count
+    ).round(2)
+    return activity_df
+
+
 def render_planned_dashboard(df):
     """Render the planned dashboard using the Data_2 workbook set."""
     if df is None:
@@ -845,6 +876,14 @@ def render_planned_dashboard(df):
     )
     st.dataframe(speciality_activity_df.head(200), use_container_width=True, hide_index=True)
 
+    st.markdown("### 🎯 Activity Analysis Speciality 2")
+    speciality_activity_2_df = build_speciality_activity_table_2(
+        filtered_df,
+        date_column='PlannedDate',
+        fallback_date_column='CallDate'
+    )
+    st.dataframe(speciality_activity_2_df.head(200), use_container_width=True, hide_index=True)
+
     st.markdown("<div style='height: 1.25rem;'></div>", unsafe_allow_html=True)
     st.markdown("## 📋 Detailed Product Breakdown")
 
@@ -880,7 +919,8 @@ def render_planned_dashboard(df):
         monthly_kpi_matrix_df=planned_monthly_kpi_df,
         product_position_df=planned_product_matrix,
         employee_product_df=planned_employee_matrix,
-        speciality_activity_df=speciality_activity_df
+        speciality_activity_df=speciality_activity_df,
+        speciality_activity_2_df=speciality_activity_2_df
     )
     st.download_button(
         label="📊 Download Planned Excel Report",
@@ -1134,6 +1174,10 @@ st.dataframe(actual_monthly_kpi_df.head(200), use_container_width=True, hide_ind
 st.markdown("### 🎯 Speciality-Wise Activity Analysis")
 speciality_activity_df = build_speciality_activity_table(filtered_df)
 st.dataframe(speciality_activity_df.head(200), use_container_width=True, hide_index=True)
+
+st.markdown("### 🎯 Activity Analysis Speciality 2")
+speciality_activity_2_df = build_speciality_activity_table_2(filtered_df)
+st.dataframe(speciality_activity_2_df.head(200), use_container_width=True, hide_index=True)
 
 st.markdown("<div style='height: 1.25rem;'></div>", unsafe_allow_html=True)
 
@@ -1604,7 +1648,8 @@ with col1:
         monthly_kpi_matrix_df=actual_monthly_kpi_df,
         product_position_df=actual_product_matrix,
         employee_product_df=actual_employee_matrix,
-        speciality_activity_df=speciality_activity_df
+        speciality_activity_df=speciality_activity_df,
+        speciality_activity_2_df=speciality_activity_2_df
     )
     st.download_button(
         label="📊 Download Excel Report",
