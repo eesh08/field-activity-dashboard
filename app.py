@@ -274,8 +274,8 @@ def _excel_cell_value(value):
     return value
 
 
-def create_excel_report_two_sheets(report_title, kpi_rows, breakdown_df, monthly_kpi_matrix_df=None, product_position_df=None, employee_product_df=None):
-    """Create an Excel report with KPI summary, detailed breakdown, KPI matrix, product position matrix, and employee matrix."""
+def create_excel_report_two_sheets(report_title, kpi_rows, breakdown_df, monthly_kpi_matrix_df=None, product_position_df=None, employee_product_df=None, speciality_activity_df=None):
+    """Create an Excel report with dashboard tables and optional activity analysis."""
     output = BytesIO()
     workbook = xlsxwriter.Workbook(output)
 
@@ -353,6 +353,10 @@ def create_excel_report_two_sheets(report_title, kpi_rows, breakdown_df, monthly
     if employee_product_df is not None:
         ws_employee_product = workbook.add_worksheet('Emp Product Division')
         write_dataframe_sheet(ws_employee_product, employee_product_df)
+
+    if speciality_activity_df is not None:
+        ws_speciality_activity = workbook.add_worksheet('Speciality Activity')
+        write_dataframe_sheet(ws_speciality_activity, speciality_activity_df)
 
     workbook.close()
     output.seek(0)
@@ -666,6 +670,76 @@ def build_monthly_kpi_breakdown_table(
     return matrix_df[['Division', 'KPI'] + month_order]
 
 
+@st.cache_data(show_spinner=False, ttl=3600)
+def build_speciality_activity_table(filtered_df, date_column='CallDate', fallback_date_column=None):
+    """Build an owner-by-metric matrix for the top specialties and Others."""
+    base_columns = ['In-Field Activity Owner', 'Metric']
+    if filtered_df.empty or 'Speciality' not in filtered_df.columns:
+        return pd.DataFrame(columns=base_columns)
+
+    working_df = filtered_df.copy()
+    date_series = working_df[date_column] if date_column in working_df.columns else pd.Series(index=working_df.index, dtype='datetime64[ns]')
+    if fallback_date_column and fallback_date_column in working_df.columns:
+        date_series = date_series.fillna(working_df[fallback_date_column])
+    working_df['_ActivityDate'] = pd.to_datetime(date_series, errors='coerce').dt.normalize()
+    owner_column = 'In-Field Activity: Owner Name'
+    working_df['_Owner'] = working_df[owner_column].fillna('Unknown').astype(str).str.strip() if owner_column in working_df.columns else 'Unknown'
+    working_df['Speciality'] = working_df['Speciality'].fillna('Unknown').astype(str).str.strip()
+    working_df['Speciality'] = working_df['Speciality'].replace({
+        'Gastroenterologist': 'Gastroenterologist',
+        'GASTROENTROLOGIST': 'Gastroenterologist',
+    })
+
+    activity_rows = []
+    for (owner, speciality), group_df in working_df.groupby(['_Owner', 'Speciality'], sort=True, dropna=False):
+        fwd = group_df['_ActivityDate'].nunique()
+        visits = len(group_df)
+        doctors_met = group_df['Customer ID'].nunique() if 'Customer ID' in group_df.columns else 0
+        activity_rows.append({
+            'In-Field Activity Owner': owner,
+            'Speciality': speciality,
+            'No. of Visits': visits,
+            'FWD': fwd,
+            'Doctors Met': doctors_met,
+            'Call Average': round(visits / fwd, 2) if fwd > 0 else 0,
+        })
+
+    activity_df = pd.DataFrame(activity_rows)
+    speciality_totals = activity_df.groupby('Speciality')['No. of Visits'].sum().sort_values(ascending=False)
+    top_specialities = speciality_totals.head(10).index.tolist()
+    remaining_df = working_df[~working_df['Speciality'].isin(top_specialities)]
+
+    if not remaining_df.empty:
+        others_rows = []
+        for owner, group_df in remaining_df.groupby('_Owner', sort=True, dropna=False):
+            fwd = group_df['_ActivityDate'].nunique()
+            visits = len(group_df)
+            doctors_met = group_df['Customer ID'].nunique() if 'Customer ID' in group_df.columns else 0
+            others_rows.append({
+                'In-Field Activity Owner': owner,
+                'Speciality': 'Others',
+                'No. of Visits': visits,
+                'FWD': fwd,
+                'Doctors Met': doctors_met,
+                'Call Average': round(visits / fwd, 2) if fwd > 0 else 0,
+            })
+        activity_df = pd.concat([activity_df, pd.DataFrame(others_rows)], ignore_index=True)
+
+    specialty_columns = top_specialities + (['Others'] if not remaining_df.empty else [])
+    metrics = ['No. of Visits', 'FWD', 'Doctors Met', 'Call Average']
+    rows = []
+    for owner in sorted(activity_df['In-Field Activity Owner'].unique()):
+        owner_df = activity_df[activity_df['In-Field Activity Owner'] == owner]
+        for metric in metrics:
+            row = {'In-Field Activity Owner': owner, 'Metric': metric}
+            for speciality in specialty_columns:
+                value = owner_df.loc[owner_df['Speciality'] == speciality, metric]
+                row[speciality] = value.iloc[0] if not value.empty else 0
+            rows.append(row)
+
+    return pd.DataFrame(rows, columns=base_columns + specialty_columns)
+
+
 def render_planned_dashboard(df):
     """Render the planned dashboard using the Data_2 workbook set."""
     if df is None:
@@ -763,6 +837,14 @@ def render_planned_dashboard(df):
     )
     st.dataframe(planned_monthly_kpi_df.head(200), use_container_width=True, hide_index=True)
 
+    st.markdown("### 🎯 Speciality-Wise Activity Analysis")
+    speciality_activity_df = build_speciality_activity_table(
+        filtered_df,
+        date_column='PlannedDate',
+        fallback_date_column='CallDate'
+    )
+    st.dataframe(speciality_activity_df.head(200), use_container_width=True, hide_index=True)
+
     st.markdown("<div style='height: 1.25rem;'></div>", unsafe_allow_html=True)
     st.markdown("## 📋 Detailed Product Breakdown")
 
@@ -797,7 +879,8 @@ def render_planned_dashboard(df):
         table_df,
         monthly_kpi_matrix_df=planned_monthly_kpi_df,
         product_position_df=planned_product_matrix,
-        employee_product_df=planned_employee_matrix
+        employee_product_df=planned_employee_matrix,
+        speciality_activity_df=speciality_activity_df
     )
     st.download_button(
         label="📊 Download Planned Excel Report",
@@ -1047,6 +1130,10 @@ actual_monthly_kpi_df = build_monthly_kpi_breakdown_table(
     date_column='CallDate'
 )
 st.dataframe(actual_monthly_kpi_df.head(200), use_container_width=True, hide_index=True)
+
+st.markdown("### 🎯 Speciality-Wise Activity Analysis")
+speciality_activity_df = build_speciality_activity_table(filtered_df)
+st.dataframe(speciality_activity_df.head(200), use_container_width=True, hide_index=True)
 
 st.markdown("<div style='height: 1.25rem;'></div>", unsafe_allow_html=True)
 
@@ -1516,7 +1603,8 @@ with col1:
         table_df,
         monthly_kpi_matrix_df=actual_monthly_kpi_df,
         product_position_df=actual_product_matrix,
-        employee_product_df=actual_employee_matrix
+        employee_product_df=actual_employee_matrix,
+        speciality_activity_df=speciality_activity_df
     )
     st.download_button(
         label="📊 Download Excel Report",
