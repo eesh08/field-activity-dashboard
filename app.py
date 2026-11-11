@@ -768,6 +768,24 @@ def build_speciality_activity_table_2(filtered_df, date_column='CallDate', fallb
     activity_df.loc[activity_df['Metric'] == 'Average Doctors Met', activity_df.columns[2:]] = (
         activity_df.loc[activity_df['Metric'] == 'Average Doctors Met', activity_df.columns[2:]] / month_count
     ).round(2)
+
+    if 'Customer ID' in filtered_df.columns:
+        doctor_rows = activity_df['Metric'] == 'Average Doctors Met'
+        doctor_totals = filtered_df.copy()
+        doctor_totals['_Owner'] = doctor_totals['In-Field Activity: Owner Name'].fillna('Unknown').astype(str).str.strip()
+        doctor_totals['Speciality'] = doctor_totals['Speciality'].fillna('Unknown').astype(str).str.strip().replace({
+            'Gastroenterologist': 'Gastroenterologist',
+            'GASTROENTROLOGIST': 'Gastroenterologist',
+        })
+        top_specialities = [column for column in activity_df.columns[2:] if column != 'Others']
+        doctor_totals.loc[~doctor_totals['Speciality'].isin(top_specialities), 'Speciality'] = 'Others'
+        doctor_totals = doctor_totals.groupby(['_Owner', 'Speciality'])['Customer ID'].nunique()
+        for row_index in activity_df.index[doctor_rows]:
+            owner = activity_df.at[row_index, 'In-Field Activity Owner']
+            for speciality in activity_df.columns[2:]:
+                unique_doctors = doctor_totals.get((owner, speciality), 0)
+                activity_df.at[row_index, speciality] = round(unique_doctors / month_count, 2)
+
     return activity_df
 
 
