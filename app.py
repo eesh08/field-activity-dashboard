@@ -751,6 +751,27 @@ def build_speciality_activity_table_2(filtered_df, date_column='CallDate', fallb
     if activity_df.empty:
         return activity_df
 
+    date_series = filtered_df[date_column] if date_column in filtered_df.columns else pd.Series(index=filtered_df.index, dtype='datetime64[ns]')
+    if fallback_date_column and fallback_date_column in filtered_df.columns:
+        date_series = date_series.fillna(filtered_df[fallback_date_column])
+    working_days_by_owner = (
+        pd.DataFrame({
+            'Owner': filtered_df['In-Field Activity: Owner Name'].fillna('Unknown').astype(str).str.strip(),
+            'ActivityDate': pd.to_datetime(date_series, errors='coerce').dt.normalize(),
+        })
+        .groupby('Owner')['ActivityDate']
+        .nunique()
+    )
+
+    visit_rows = activity_df['Metric'] == 'No. of Visits'
+    visits_by_owner_speciality = activity_df.loc[visit_rows].set_index('In-Field Activity Owner')
+    for row_index in activity_df.index[activity_df['Metric'] == 'Call Average']:
+        owner = activity_df.at[row_index, 'In-Field Activity Owner']
+        working_days = working_days_by_owner.get(owner, 0)
+        for speciality in activity_df.columns[2:]:
+            visits = visits_by_owner_speciality.at[owner, speciality] if owner in visits_by_owner_speciality.index else 0
+            activity_df.at[row_index, speciality] = round(visits / working_days, 2) if working_days > 0 else 0
+
     if 'Month' in filtered_df.columns:
         month_count = filtered_df['Month'].dropna().nunique()
     else:
