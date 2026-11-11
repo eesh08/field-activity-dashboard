@@ -761,12 +761,16 @@ def build_speciality_activity_table_2(filtered_df, date_column='CallDate', fallb
     month_count = max(int(month_count), 1)
 
     activity_df.loc[activity_df['Metric'] == 'No. of Visits', 'Metric'] = 'Average No. of Visits'
+    activity_df.loc[activity_df['Metric'] == 'FWD', 'Metric'] = 'Average FWD'
     activity_df.loc[activity_df['Metric'] == 'Doctors Met', 'Metric'] = 'Average Doctors Met'
     activity_df.loc[activity_df['Metric'] == 'Average No. of Visits', activity_df.columns[2:]] = (
         activity_df.loc[activity_df['Metric'] == 'Average No. of Visits', activity_df.columns[2:]] / month_count
     ).round(2)
     activity_df.loc[activity_df['Metric'] == 'Average Doctors Met', activity_df.columns[2:]] = (
         activity_df.loc[activity_df['Metric'] == 'Average Doctors Met', activity_df.columns[2:]] / month_count
+    ).round(2)
+    activity_df.loc[activity_df['Metric'] == 'Average FWD', activity_df.columns[2:]] = (
+        activity_df.loc[activity_df['Metric'] == 'Average FWD', activity_df.columns[2:]] / month_count
     ).round(2)
 
     if 'Customer ID' in filtered_df.columns:
@@ -779,12 +783,19 @@ def build_speciality_activity_table_2(filtered_df, date_column='CallDate', fallb
         })
         top_specialities = [column for column in activity_df.columns[2:] if column != 'Others']
         doctor_totals.loc[~doctor_totals['Speciality'].isin(top_specialities), 'Speciality'] = 'Others'
-        doctor_totals = doctor_totals.groupby(['_Owner', 'Speciality'])['Customer ID'].nunique()
+        if 'Month' in doctor_totals.columns:
+            doctor_totals['_AnalysisMonth'] = doctor_totals['Month'].astype(str)
+        else:
+            analysis_dates = doctor_totals[date_column] if date_column in doctor_totals.columns else pd.Series(index=doctor_totals.index, dtype='datetime64[ns]')
+            if fallback_date_column and fallback_date_column in doctor_totals.columns:
+                analysis_dates = analysis_dates.fillna(doctor_totals[fallback_date_column])
+            doctor_totals['_AnalysisMonth'] = pd.to_datetime(analysis_dates, errors='coerce').dt.to_period('M').astype(str)
+        doctor_totals = doctor_totals.groupby(['_Owner', 'Speciality', '_AnalysisMonth'])['Customer ID'].nunique()
         for row_index in activity_df.index[doctor_rows]:
             owner = activity_df.at[row_index, 'In-Field Activity Owner']
             for speciality in activity_df.columns[2:]:
-                unique_doctors = doctor_totals.get((owner, speciality), 0)
-                activity_df.at[row_index, speciality] = round(unique_doctors / month_count, 2)
+                monthly_doctors = doctor_totals.loc[owner, speciality] if (owner, speciality) in doctor_totals.index.droplevel('_AnalysisMonth') else pd.Series(dtype='int64')
+                activity_df.at[row_index, speciality] = round(monthly_doctors.sum() / month_count, 2)
 
     return activity_df
 
